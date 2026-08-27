@@ -2,6 +2,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&family=Bitter:wght@600;700&display=swap">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
 <style>
 :root{
@@ -162,6 +164,22 @@ var SHELL = ('<!doctype html>\n<html lang="en">' + document.documentElement.inne
   .replace(/<!--\s*frame-runtime\s*-->[\s\S]*?<!--\s*\/frame-runtime\s*-->/g, '');
 var STATE_RE = /<script id="app-state" type="application\/json">[\s\S]*?<\/script>/;
 
+/* ================= firebase (optional realtime sync) =================
+   Blank by default. Fill in a real Realtime Database project's config to
+   turn on "firebase" mode — any phone with the link can then score without
+   depending on the artifact publish/share-pin dance. See database.rules.json
+   for the access window this expects. */
+var FIREBASE = {
+  apiKey: "",
+  authDomain: "",
+  databaseURL: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+var ROOT = "pursellCup2026";
+
 /* ================= course: FarmLinks at Pursell Farms ================= */
 var PAR = [5,4,4,4,3,5,4,3,4, 5,4,4,4,4,3,4,3,5];
 var SI  = [15,9,13,1,7,17,11,5,3, 14,6,2,18,4,10,12,8,16];
@@ -296,8 +314,15 @@ function readPublished(){
 function readLocal(){
   try{var raw=localStorage.getItem(LS);return raw?JSON.parse(raw):null}catch(e){return null}
 }
+/* Every config edit bumps S.cfgAt, so a change in cfgAt since the last save
+   is exactly "config changed" — that's the debounce trigger for the firebase
+   push, with no need to touch every call site that edits config. Result-only
+   saves (holes tapped) never move cfgAt, so they never trigger it. */
+var lastQueuedCfgAt=null;
 function saveLocal(){
   try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}
+  if(lastQueuedCfgAt!==null && S.cfgAt!==lastQueuedCfgAt) scheduleFirebaseConfig();
+  lastQueuedCfgAt=S.cfgAt;
 }
 
 /* Merge per match on updatedAt. Different groups edit different matches, so
@@ -390,10 +415,17 @@ function mergeState(pub,loc){
   return out;
 }
 
+/* True only when boot() had nothing real to work with (no artifact-embedded
+   state, no localStorage) and fell back to freshState(). That state's stamps
+   are all "now", which would wrongly beat a firebase snapshot's real, older
+   stamps in a per-entity merge — so the first firebase snapshot must replace
+   it outright instead of merging against it. See subscribeFirebase(). */
+var freshBoot=false;
 function boot(){
   var pub=stampMissing(readPublished()), loc=stampMissing(readLocal());
   if(pub && loc) S = mergeState(pub, loc);
-  else S = pub || loc || stampMissing(freshState());
+  else if(pub || loc) S = pub || loc;
+  else { S = stampMissing(freshState()); freshBoot=true; }
   if(!S.si) S.si=SI.slice();
   if(!S.par) S.par=PAR.slice();
   if(!S.results) S.results={};
@@ -408,6 +440,7 @@ function touchCfg(){ S.cfgAt=Date.now(); saveLocal(); render(); }
 function touchResult(mid,r){
   r.updatedBy = me || "someone"; r.updatedAt = Date.now();
   S.results[mid]=r; saveLocal(); render();
+  syncResult(mid,r);
 }
 
 /* ================= golf math ================= */
@@ -531,6 +564,143 @@ function pts(v){
 }
 
 /* ================= sync ================= */
+/* Three drivers, picked once at boot:
+     "firebase" — FIREBASE.databaseURL is set and the SDK loaded. Every tap
+       writes straight to the Realtime Database; every phone with the link
+       gets every other phone's taps live via .on("value").
+     "artifact" — no Firebase configured, but the artifact runtime is here.
+       Falls back to the original manual "Post to the board" publish flow.
+     "local"    — neither is available (or a shared artifact turned out to
+       be read-only). Nothing leaves this phone. */
+var driver="local";
+function pickDriver(){
+  if(FIREBASE.databaseURL && window.firebase && window.firebase.database) return "firebase";
+  if(window.claude && window.claude.use) return "artifact";
+  return "local";
+}
+function syncLabel(){
+  if(driver==="firebase") return "Synced live · Firebase";
+  if(driver==="artifact") return "Synced live · shared board";
+  return "Local only · not synced";
+}
+
+/* ---- ordering, for the firebase path only -------------------------------
+   RTDB stores collections as {id: value} maps (so partial writes don't
+   clobber siblings), and hands back object keys in whatever order the
+   server feels like — not insertion order. syncDay() mirrors pairings BY
+   MATCH INDEX, so losing array order silently scrambles every pairing.
+   Every player, session and match gets an explicit `ord` on the way out,
+   and gets re-sorted by it on the way back in. RTDB also treats an empty
+   array as "no children" and drops it, so aIds/bIds are coerced back. */
+function toMap(list){
+  var out={};
+  (list||[]).forEach(function(x,i){
+    if(!x||!x.id) return;
+    var copy={};
+    for(var k in x) if(Object.prototype.hasOwnProperty.call(x,k)) copy[k]=x[k];
+    copy.ord=i;
+    out[x.id]=copy;
+  });
+  return out;
+}
+function fromMap(m){
+  var list=[];
+  for(var k in m) if(Object.prototype.hasOwnProperty.call(m,k)) list.push(m[k]);
+  list.sort(function(a,b){ return (a.ord||0)-(b.ord||0); });
+  return list;
+}
+function coerceIds(m){
+  m.aIds=m.aIds||[]; m.bIds=m.bIds||[];
+  return m;
+}
+function sessionsToMap(sessions){
+  var out={};
+  (sessions||[]).forEach(function(s,i){
+    var copy={};
+    for(var k in s) if(Object.prototype.hasOwnProperty.call(s,k)) copy[k]=s[k];
+    copy.ord=i;
+    copy.matches=toMap(s.matches);
+    out[s.id]=copy;
+  });
+  return out;
+}
+function firebaseSnapshotToState(val){
+  if(!val||!val.meta) return null;
+  var meta=val.meta;
+  var sessions=fromMap(val.sessions).map(function(s){
+    var copy={};
+    for(var k in s) if(Object.prototype.hasOwnProperty.call(s,k)) copy[k]=s[k];
+    copy.matches=fromMap(s.matches).map(coerceIds);
+    return copy;
+  });
+  return {
+    v:meta.v, rosterV:meta.rosterV, event:meta.event, course:meta.course, teams:meta.teams,
+    si:meta.si, par:meta.par, cfgAt:meta.cfgAt,
+    players:fromMap(val.players), sessions:sessions,
+    results:val.results||{}, removed:val.removed||{}
+  };
+}
+
+/* ---- firebase driver ---- */
+var fbApp=null, fbDb=null;
+function ensureFirebase(){
+  if(driver!=="firebase") return null;
+  if(fbDb) return fbDb;
+  try{
+    fbApp = (firebase.apps && firebase.apps.length) ? firebase.apps[0] : firebase.initializeApp(FIREBASE);
+    fbDb = firebase.database(fbApp);
+  }catch(e){ fbDb=null; }
+  return fbDb;
+}
+function subscribeFirebase(){
+  var db=ensureFirebase(); if(!db) return;
+  db.ref(ROOT).on("value", function(snap){
+    var remote=stampMissing(firebaseSnapshotToState(snap.val()||{}));
+    if(!remote) return;
+    /* First real data this phone has ever seen: adopt it outright rather
+       than merging, so freshBoot's synthetic "now" stamps can't outrank it. */
+    S = freshBoot ? remote : mergeState(remote, S);
+    freshBoot=false;
+    if(!S.si) S.si=SI.slice();
+    if(!S.par) S.par=PAR.slice();
+    if(!S.results) S.results={};
+    if(!S.removed) S.removed={};
+    migrateRoster();
+    normalizeDays();
+    saveLocal(); render();
+  }, function(){ /* permission denied / offline — local writes keep working */ });
+}
+var fbCfgTimer=null;
+function scheduleFirebaseConfig(){
+  if(driver!=="firebase") return;
+  if(fbCfgTimer) clearTimeout(fbCfgTimer);
+  fbCfgTimer=setTimeout(pushFirebaseConfig,900);
+}
+function pushFirebaseConfig(){
+  fbCfgTimer=null;
+  var db=ensureFirebase(); if(!db) return;
+  var updates={};
+  updates[ROOT+"/meta"]={
+    v:S.v, rosterV:S.rosterV, event:S.event, course:S.course, teams:S.teams,
+    si:S.si, par:S.par, cfgAt:S.cfgAt
+  };
+  updates[ROOT+"/players"]=toMap(S.players);
+  updates[ROOT+"/sessions"]=sessionsToMap(S.sessions);
+  updates[ROOT+"/removed"]=S.removed||{};
+  db.ref().update(updates).catch(function(){});
+}
+function syncResult(mid,r){
+  if(driver!=="firebase") return;
+  var db=ensureFirebase(); if(!db) return;
+  db.ref(ROOT+"/results/"+mid).set(r).catch(function(){});
+}
+function syncWipe(){
+  if(driver!=="firebase") return;
+  var db=ensureFirebase(); if(!db) return;
+  db.ref(ROOT+"/results").remove().catch(function(){});
+}
+
+/* ---- artifact driver (fallback) ---- */
 var artifactNS=null, artifactTried=false;
 function ensureArtifact(){
   if(artifactTried) return Promise.resolve(artifactNS);
@@ -555,7 +725,11 @@ function post(){
       posting=false; render();
       var c=err&&err.code;
       if(c==="conflict") toast("Someone posted first — the board refreshed. Tap Post again.");
-      else if(c==="not_granted"||c==="not_writer") toast("You have view-only access. Ask Trevor for edit rights.");
+      else if(c==="not_writer"){
+        driver="local"; render();
+        toast("This link is view-only, so retrying won't help — switched to local-only scoring on this phone.");
+      }
+      else if(c==="not_granted") toast("You have view-only access. Ask Trevor for edit rights.");
       else toast("Couldn't reach the board. Your scores are safe on this phone.");
     });
   });
@@ -600,7 +774,8 @@ function renderHeader(){
     '</div>'+
     tugHTML(t.a-t.b, Math.max(3,t.target), t.target)+
     '<div class="eyebrow" style="text-align:center;margin-top:6px">'+
-      (t.a+t.b)+' of '+t.n+' points decided</div>';
+      (t.a+t.b)+' of '+t.n+' points decided</div>'+
+    '<div class="eyebrow" style="text-align:center;margin-top:3px">'+esc(syncLabel())+'</div>';
   h.querySelector("#theme").onclick=function(){
     var r=document.documentElement, cur=r.getAttribute("data-theme");
     var dark=window.matchMedia&&window.matchMedia("(prefers-color-scheme:dark)").matches;
@@ -760,10 +935,14 @@ function renderMatch(){
     '<button class="btn btn-solid" id="next" style="min-height:44px"'+(hs.indexOf(h)===8?" disabled":"")+'>Next</button>'+
     '</div></div>';
 
-  html+='<button class="btn btn-solid" id="post" style="width:100%"'+(posting?" disabled":"")+'>'+
-    (posting?"Posting…":"Post to the board")+'</button>'+
-    '<div class="mini" style="text-align:center;margin-top:-8px">Scores save on this phone instantly. '+
-    'Posting shares them with everyone.</div>';
+  html+= driver==="artifact" ?
+    ('<button class="btn btn-solid" id="post" style="width:100%"'+(posting?" disabled":"")+'>'+
+      (posting?"Posting…":"Post to the board")+'</button>'+
+      '<div class="mini" style="text-align:center;margin-top:-8px">Scores save on this phone instantly. '+
+      'Posting shares them with everyone.</div>')
+    : ('<div class="mini" style="text-align:center">'+esc(driver==="firebase" ?
+        "Scores sync automatically to every phone with the link." :
+        "Scores save on this phone only — no shared board is connected.")+'</div>');
   return html;
 }
 function allocLine(m,alloc,s){
@@ -900,10 +1079,14 @@ function renderSetup(){
     }).join("")+'</div></div>';
 
   html+='<div class="card"><h2 style="font-size:16px;margin-bottom:9px">Board</h2>'+
-    '<div class="mini" style="margin-bottom:10px">Holes save on this phone the instant you tap them. '+
-    'Posting pushes them to everyone — after each hole, or once at the turn.</div>'+
-    '<button class="btn btn-solid" id="post2" style="width:100%"'+(posting?" disabled":"")+'>'+
-      (posting?"Posting…":"Post everything to the board")+'</button>'+
+    '<div class="mini" style="margin-bottom:10px">'+esc(driver==="artifact" ?
+      "Holes save on this phone the instant you tap them. Posting pushes them to everyone — after each hole, or once at the turn." :
+      driver==="firebase" ?
+      "Holes sync automatically to every phone with the link the instant you tap them." :
+      "Holes save on this phone only — no shared board is connected.")+'</div>'+
+    (driver==="artifact" ?
+      '<button class="btn btn-solid" id="post2" style="width:100%"'+(posting?" disabled":"")+'>'+
+        (posting?"Posting…":"Post everything to the board")+'</button>' : '')+
     '<div class="row" style="margin-top:9px;flex-wrap:nowrap">'+
       '<button class="btn" id="pull" style="flex:1;font-size:13px">Refresh from board</button>'+
       '<button class="btn" id="discard" style="flex:1;font-size:13px">Discard my unposted</button></div>'+
@@ -1093,7 +1276,9 @@ function wire(root){
       return;
     }
     S.results={}; saveLocal(); render();
-    toast("Every score cleared on this phone. Post to wipe the shared board.");
+    syncWipe();
+    toast(driver==="firebase" ? "Every score cleared for everyone."
+      : "Every score cleared on this phone. Post to wipe the shared board.");
   };
 }
 
@@ -1118,8 +1303,10 @@ function render(){
 }
 
 try{var th=localStorage.getItem(LS+":theme"); if(th)document.documentElement.setAttribute("data-theme",th)}catch(e){}
+driver=pickDriver();
 boot();
 render();
-ensureArtifact();
+if(driver==="firebase") subscribeFirebase();
+else if(driver==="artifact") ensureArtifact();
 })();
 </script>

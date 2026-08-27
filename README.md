@@ -11,7 +11,13 @@ Single self-contained HTML file. No build step, no dependencies, no framework.
 
 ## Read this before changing anything
 
-Three things will bite you. They are not obvious from the code.
+The three gotchas below are about the **artifact publish path** — the fallback
+used when `FIREBASE` (near the top of the `<script>` in `pursell-cup.html`) is
+blank. Once a real Firebase project is configured there, the app runs in
+`"firebase"` mode instead: every phone syncs live off the Realtime Database and
+none of this applies. See **Sync model** for how driver selection works and
+what changes between modes. They're not obvious from the code, so read them
+before touching the artifact fallback.
 
 ### 1. The published artifact holds the live scores. This repo does not.
 
@@ -100,8 +106,48 @@ SI    15  9 13  1  7 17 11  5  3 14  6  2 18  4 10 12  8 16
 
 ## Sync model
 
-Local-first. Every tap writes to `localStorage` immediately — works with no signal,
-which matters on the back side of the property.
+Local-first, always. Every tap writes to `localStorage` immediately — works with no
+signal, which matters on the back side of the property. A driver is picked once at
+boot (`pickDriver()`) and shown on the header's sync line:
+
+- **`"firebase"`** — `FIREBASE.databaseURL` is filled in and the compat SDK loaded.
+  Any phone with the link can score, no publish/share-pin step required. Every hole
+  tap writes straight to `ROOT/results/<matchId>`; config edits (roster, pairings,
+  stroke index, team names) are debounced ~900ms and pushed to
+  `ROOT/{meta,players,sessions,removed}`. The app subscribes to `ROOT` with
+  `.on("value")` and feeds every snapshot through the same `mergeState()` used by the
+  artifact path — per-match and per-entity merge logic doesn't change based on driver.
+  The Post button is hidden; there's nothing to post.
+- **`"artifact"`** — no Firebase configured, but the artifact runtime is present. Falls
+  back to the original `artifact.publish()` flow described below. If a publish ever
+  comes back `not_writer` (a shared, view-only artifact link), the app drops to
+  `"local"` on the spot and says so — that viewer can never write here, so retrying
+  is pointless.
+- **`"local"`** — neither is available. Everything stays on this phone.
+
+### The RTDB ordering trap
+
+Realtime Database stores `players`/`sessions`/`matches` as `{id: value}` maps, not
+arrays — needed so a config push doesn't clobber a sibling's edit — and hands back
+object keys in **whatever order the server feels like**, not insertion order. But
+`syncDay()` mirrors pairings **by match index**: match 2 on the front nine has to line
+up with match 2 on the back nine. Losing array order silently scrambles every pairing
+onto the wrong slot.
+
+So every player, session and match carries an explicit `ord` (its position in the
+array) on the way out (`toMap`/`sessionsToMap`), and gets re-sorted by `ord` on the way
+back in (`fromMap`). RTDB also treats an empty array as "no children" and drops it
+entirely, so `aIds`/`bIds` come back `undefined`, not `[]`, on a pairing nobody's set
+yet — `coerceIds()` puts the empty array back. `tests/firebase.test.js` round-trips
+state through deliberately key-reversed maps and asserts both hold.
+
+A brand-new phone that has never seen this event (no artifact-embedded state, no
+`localStorage`) boots into `freshState()`, stamped "now". Its first firebase snapshot
+must **replace** that state outright rather than merge with it — a per-entity merge
+would let the synthetic "now" stamps wrongly outrank the real (older) data on the
+board. See the `freshBoot` flag in `boot()`/`subscribeFirebase()`.
+
+### The artifact fallback
 
 "Post to the board" calls `artifact.publish()` with the full document and the current
 state embedded. **State merges per match on `updatedAt`**, so posting your group's match
@@ -112,6 +158,20 @@ phone.
 `migrateRoster()` patches cached handicaps by name when `ROSTER_V` is bumped, without
 disturbing pairings or scores. Bump it whenever a handicap in `ROSTER` changes.
 
+## Deploying with Firebase
+
+1. Create a Realtime Database project, then fill in `FIREBASE` near the top of the
+   `<script>` in `pursell-cup.html` (`apiKey`, `databaseURL`, etc.) and pick a `ROOT`.
+2. Deploy `database.rules.json` to that project. It's world-readable and world-writable
+   through **2026-09-14**, then flips to read-only — adjust the cutoff timestamp for a
+   different event window.
+3. `vercel.json` rewrites `/` to `pursell-cup.html` with `Cache-Control: no-store`, so a
+   redeploy reaches phones immediately instead of waiting out a cache. `.vercelignore`
+   keeps `tests/`, `tools/` and `archive/` out of the deployed bundle.
+
+Once `FIREBASE.databaseURL` is set, every phone that loads the page syncs live — no
+artifact share pin, no "Post" step, no owner needed to relay changes.
+
 ## Tests
 
 No framework. Plain Node, no install.
@@ -119,6 +179,8 @@ No framework. Plain Node, no install.
 ```
 node tests/engine.test.js      # 32 checks: allocation, stroke spreading, closeouts
 node tests/daysync.test.js     # 11 checks: per-day pairing mirror
+node tests/merge.test.js       # 21 checks: per-entity config merge (artifact + firebase share this)
+node tests/firebase.test.js    # 15 checks: RTDB key-order + empty-array round trip
 node tools/rostercheck.js      # handicap spread analysis, not a test
 ```
 
@@ -128,9 +190,14 @@ if handicaps change — it's how the 15-shot ceiling in Saturday singles got cau
 ## Layout
 
 ```
-pursell-cup.html          the entire app
-tests/engine.test.js      golf math
-tests/daysync.test.js     pairing mirror
-tools/rostercheck.js      handicap analysis
+pursell-cup.html            the entire app
+tests/engine.test.js        golf math
+tests/daysync.test.js       pairing mirror
+tests/merge.test.js         per-entity config merge
+tests/firebase.test.js      RTDB ordering + empty-array round trip
+tools/rostercheck.js        handicap analysis
+vercel.json                 rewrite / to pursell-cup.html, no-store
+.vercelignore                keeps tests/tools/archive out of the deploy
+database.rules.json         world read, timed write window, then read-only
 archive/ryder-cup-live.jsx  original React draft, superseded
 ```
