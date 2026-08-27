@@ -1,0 +1,16 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Node (none of the tests need deps, but keep it clean if anything is ever added)
+node_modules/
+npm-debug.log*
+
+# Artifact reads pulled down for merging — transient, never commit
+artifact-*.html

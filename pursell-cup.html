@@ -1,0 +1,1039 @@
+<title>Pursell Cup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&family=Bitter:wght@600;700&display=swap">
+
+<style>
+:root{
+  --ground:#FBFAF7; --panel:#FFFFFF; --sunk:#F1EFE9; --line:#DCD8CD; --line-hi:#C4BFB1;
+  --ink:#141A16; --ink-2:#4A544C; --ink-3:#79837A;
+  --a:#B03A2E; --a-soft:#F6E4E1; --b:#1F5C8B; --b-soft:#DFEAF3;
+  --turf:#3D6B4A; --halve:#8A8578; --warn:#8A5A1B; --on-turf:#FFFFFF;
+  --shadow:0 1px 2px rgba(20,26,22,.06),0 4px 14px rgba(20,26,22,.05);
+  --r:12px; --tap:48px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#101512; --panel:#171E19; --sunk:#1E2721; --line:#2C3830; --line-hi:#3D4C42;
+    --ink:#EDEAE0; --ink-2:#A8B2A8; --ink-3:#7B857C;
+    --a:#E0705E; --a-soft:#3A211C; --b:#6FA8D8; --b-soft:#182B3A;
+    --turf:#7FB08C; --halve:#9A958A; --warn:#D8A55E; --on-turf:#0E140F;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.25);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#101512; --panel:#171E19; --sunk:#1E2721; --line:#2C3830; --line-hi:#3D4C42;
+  --ink:#EDEAE0; --ink-2:#A8B2A8; --ink-3:#7B857C;
+  --a:#E0705E; --a-soft:#3A211C; --b:#6FA8D8; --b-soft:#182B3A;
+  --turf:#7FB08C; --halve:#9A958A; --warn:#D8A55E; --on-turf:#0E140F;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.25);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  margin:0;background:var(--ground);color:var(--ink);
+  font-family:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%;
+}
+.wrap{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none;padding:0}
+:focus-visible{outline:2.5px solid var(--turf);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.num{font-family:"Barlow Condensed","Barlow",sans-serif;font-weight:700;font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
+h1,h2,h3{font-family:"Bitter",Georgia,serif;font-weight:600;margin:0;text-wrap:balance;letter-spacing:-.01em}
+
+/* ---- header ---- */
+.hdr{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--line);padding:10px 16px 12px}
+.hdr-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.score-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:10px;margin-bottom:10px}
+.tname{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:1px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tscore{font-size:44px;line-height:.88}
+.target{text-align:center;font-family:"Bitter",Georgia,serif;font-size:12px;color:var(--ink-3);padding-bottom:5px;white-space:nowrap}
+
+.tug{position:relative;height:10px;background:var(--sunk);border-radius:99px;overflow:hidden}
+.tug-fill{position:absolute;top:0;bottom:0;transition:left .4s cubic-bezier(.4,0,.2,1),width .4s cubic-bezier(.4,0,.2,1)}
+.tug-mid{position:absolute;top:-1px;bottom:-1px;left:50%;width:2px;background:var(--line-hi);transform:translateX(-1px)}
+.tug-goal{position:absolute;top:0;bottom:0;width:1px;background:var(--ink-3);opacity:.5}
+
+/* ---- nav ---- */
+.nav{position:sticky;bottom:0;z-index:20;background:var(--panel);border-top:1px solid var(--line);display:flex;
+  padding-bottom:env(safe-area-inset-bottom)}
+.nav button{flex:1;min-height:var(--tap);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);border-top:2.5px solid transparent;margin-top:-1px}
+.nav button[aria-current="page"]{color:var(--ink);border-top-color:var(--turf)}
+
+/* ---- generic ---- */
+.main{flex:1;padding:16px 16px 28px;display:flex;flex-direction:column;gap:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--shadow)}
+.sec{display:flex;flex-direction:column;gap:9px}
+.sec-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.btn{min-height:var(--tap);padding:0 16px;border-radius:10px;border:1.5px solid var(--line-hi);
+  background:var(--panel);font-weight:600;font-size:14px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn:active{transform:translateY(1px)}
+.btn-solid{background:var(--turf);border-color:var(--turf);color:var(--on-turf)}
+.btn-danger{color:var(--a);border-color:var(--a)}
+.btn[disabled]{opacity:.35;pointer-events:none}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+input,select,textarea{width:100%;min-height:var(--tap);background:var(--ground);color:var(--ink);
+  border:1.5px solid var(--line);border-radius:9px;padding:8px 10px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--turf)}
+
+/* ---- match row ---- */
+.mrow{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);
+  border-left:4px solid var(--line);border-radius:10px;padding:11px 13px;box-shadow:var(--shadow)}
+.mrow-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.side{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-a{color:var(--a)} .side-b{color:var(--b)}
+.mstat{text-align:right;flex-shrink:0}
+.mstat .num{font-size:17px;letter-spacing:.01em}
+.pill{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  padding:2px 7px;border-radius:99px;background:var(--sunk);color:var(--ink-3)}
+.pill-final{background:var(--turf);color:var(--panel)}
+.pill-live{background:var(--a-soft);color:var(--a)}
+
+/* ---- hole strip ---- */
+.strip{display:flex;gap:6px;overflow-x:auto;padding:4px 0 10px;scrollbar-width:thin}
+.hchip{flex:0 0 auto;width:46px;min-height:56px;border-radius:10px;border:1.5px solid var(--line);
+  background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px}
+.hchip[aria-current="true"]{border-color:var(--ink);border-width:2.5px;background:var(--sunk)}
+.hchip .n{font-size:15px}
+.hchip .par{font-size:9px;color:var(--ink-3);font-weight:600}
+.dot{width:18px;height:4px;border-radius:2px;background:var(--line-hi)}
+
+/* ---- entry ---- */
+.tap3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.tapbtn{min-height:76px;border-radius:11px;border:2px solid var(--line);background:var(--panel);
+  font-weight:700;font-size:13px;line-height:1.2;padding:6px;display:flex;align-items:center;justify-content:center;text-align:center}
+.tapbtn[aria-pressed="true"]{color:var(--panel)}
+.pentry{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--sunk)}
+.pentry:last-child{border-bottom:none}
+.pentry input{width:74px;flex:0 0 74px;text-align:center;font-family:"Barlow Condensed",sans-serif;
+  font-weight:700;font-size:22px;font-variant-numeric:tabular-nums;min-height:52px}
+.shot{display:inline-block;font-size:10px;font-weight:700;color:var(--warn);letter-spacing:.04em}
+
+.banner{border-radius:10px;padding:11px 13px;font-size:13.5px;line-height:1.45;border:1px solid}
+.banner-info{background:var(--sunk);border-color:var(--line);color:var(--ink-2)}
+.banner-warn{background:var(--a-soft);border-color:var(--a);color:var(--a)}
+
+.toast{position:fixed;left:50%;bottom:76px;transform:translateX(-50%) translateY(14px);z-index:60;
+  background:var(--ink);color:var(--ground);font-size:13.5px;font-weight:600;padding:11px 16px;border-radius:10px;
+  max-width:min(430px,88vw);text-align:center;opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;
+  box-shadow:0 6px 24px rgba(0,0,0,.22)}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.grid9{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.mini{font-size:12.5px;color:var(--ink-2)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--sunk)}
+th{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.scroll-x{overflow-x:auto}
+.hide{display:none!important}
+</style>
+
+<script id="app-state" type="application/json">{"v":1}</script>
+
+<div class="wrap">
+  <header class="hdr" id="hdr"></header>
+  <main class="main" id="main"></main>
+  <nav class="nav" id="nav"></nav>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* Capture the pristine document shell BEFORE any render, so republishing
+   rebuilds the page from source rather than from mutated DOM.
+
+   The host injects a versioned runtime block (and a <base href> pointing at
+   THIS version's asset path) into <head> at serve time. Both must be stripped
+   before we hand the document back, or every post would bake in a stale base
+   href and stack another copy of the runtime. */
+var SHELL = ('<!doctype html>\n<html lang="en">' + document.documentElement.innerHTML + '</html>')
+  .replace(/<!--\s*frame-runtime\s*-->[\s\S]*?<!--\s*\/frame-runtime\s*-->/g, '');
+var STATE_RE = /<script id="app-state" type="application\/json">[\s\S]*?<\/script>/;
+
+/* ================= course: FarmLinks at Pursell Farms ================= */
+var PAR = [5,4,4,4,3,5,4,3,4, 5,4,4,4,4,3,4,3,5];
+var SI  = [15,9,13,1,7,17,11,5,3, 14,6,2,18,4,10,12,8,16];
+
+var FORMATS = {
+  scramble:   {label:"Scramble",          per:2, alloc:"lowhigh", lo:.35, hi:.15, note:"35% low + 15% high"},
+  fourball:   {label:"Best Ball",         per:2, alloc:"player",  pct:1.00, note:"100% — each player"},
+  shamble:    {label:"Shamble",           per:2, alloc:"player",  pct:0.75, note:"75% — each player"},
+  greensomes: {label:"Modified Alt Shot", per:2, alloc:"lowhigh", lo:.60, hi:.40, note:"60% low + 40% high"},
+  singles:    {label:"Singles",           per:1, alloc:"diff",    pct:1.00, note:"100% of the difference"}
+};
+
+function uid(){return Math.random().toString(36).slice(2,9)}
+
+function buildSchedule(){
+  function mk(n){var a=[];for(var i=0;i<n;i++)a.push({id:uid(),aIds:[],bIds:[]});return a}
+  return [
+    {id:"s1",day:"Thursday",format:"scramble",  nine:"front",matches:mk(5)},
+    {id:"s2",day:"Thursday",format:"fourball",  nine:"back", matches:mk(5)},
+    {id:"s3",day:"Friday",  format:"shamble",   nine:"front",matches:mk(5)},
+    {id:"s4",day:"Friday",  format:"greensomes",nine:"back", matches:mk(5)},
+    {id:"s5",day:"Saturday",format:"singles",   nine:"front",matches:mk(10)},
+    {id:"s6",day:"Saturday",format:"singles",   nine:"back", matches:mk(10)}
+  ];
+}
+/* Session labels are derived, never stored — flipping a session's nine
+   relabels it instead of stranding an old name on the wrong loop. */
+function nineName(s){ return s.nine==="back" ? "Back 9" : "Front 9" }
+function sessName(s){ return s.day.slice(0,3)+" "+nineName(s) }
+
+/* Pairings live at the day level: a group plays both nines together, so an edit
+   to one session mirrors by match index onto the other. Match ids stay distinct
+   per session because the scores are separate. */
+function dayList(){
+  var out=[];
+  S.sessions.forEach(function(s){ if(out.indexOf(s.day)<0) out.push(s.day) });
+  return out;
+}
+function dayPeers(d){ return S.sessions.filter(function(x){return x.day===d}) }
+function syncDay(s){
+  dayPeers(s.day).forEach(function(p){
+    if(p.id===s.id) return;
+    s.matches.forEach(function(m,i){
+      if(!p.matches[i]) return;
+      p.matches[i].aIds=m.aIds.slice();
+      p.matches[i].bIds=m.bIds.slice();
+    });
+  });
+}
+/* Runs at boot on cached state. Only fills peer matches that are still empty,
+   so a pairing somebody already set by hand is never overwritten. */
+function normalizeDays(){
+  S.sessions.forEach(function(s){
+    dayPeers(s.day).forEach(function(p){
+      if(p.id===s.id) return;
+      s.matches.forEach(function(m,i){
+        var pm=p.matches[i];
+        if(!pm || pm.aIds.length || pm.bIds.length) return;
+        pm.aIds=m.aIds.slice(); pm.bIds=m.bIds.slice();
+      });
+    });
+  });
+}
+/* Roster from the Barn Burner sheet. [name, index, course handicap, team, tee]
+   Bobby Keith and Dennis Hall Sr play the Bobcat tees; everyone else White Tail,
+   so those two carry their Bobcat course handicaps. */
+var ROSTER=[
+  ["Adam Horsley",     6.8,  9, "b","WT"],
+  ["Andrew Mattieson", 0.7,  2, "b","WT"],
+  ["Billy Mehan",      5.5,  8, "b","WT"],
+  ["Bobby Keith",     14.8, 12, "a","BC"],
+  ["Brandon King",    18.0, 23, "b","WT"],
+  ["Brandon Lemke",   11.0, 14, "a","WT"],
+  ["Chris Miller",     2.9,  5, "a","WT"],
+  ["Dennis Hall",      5.1,  7, "b","WT"],
+  ["Dennis Hall Sr",   5.4,  5, "a","BC"],
+  ["Eric Hornsby",    14.3, 18, "b","WT"],
+  ["Garrett Hayes",    2.7,  4, "b","WT"],
+  ["Jackson Tutterow", 5.0,  7, "a","WT"],
+  ["Nathan Abner",    23.2, 29, "b","WT"],
+  ["Paul Ettari",     12.2, 16, "b","WT"],
+  ["Rob Hodgkiss",     7.5, 10, "a","WT"],
+  ["Brian Richards",   6.0,  9, "a","WT"],
+  ["Stephen Pair",    10.1, 13, "b","WT"],
+  ["Taki Skouras",    25.4, 32, "a","WT"],
+  ["Trevor Bocian",    7.7, 10, "a","WT"],
+  ["Will Matthis",     4.8,  7, "a","WT"]
+];
+/* Bump when a handicap in ROSTER changes, so phones that already cached the
+   old numbers get patched without losing pairings or scores. */
+var ROSTER_V=2;
+function freshState(){
+  return {
+    v:2, rosterV:ROSTER_V, event:"Barn Burner", course:"FarmLinks at Pursell Farms",
+    teams:{a:{name:"Trevor"},b:{name:"Andrew"}},
+    players:ROSTER.map(function(r){
+      return {id:uid(),name:r[0],idx:r[1],ch:r[2],team:r[3],tee:r[4]};
+    }),
+    sessions:buildSchedule(), si:SI.slice(), par:PAR.slice(),
+    results:{}, cfgAt:Date.now()
+  };
+}
+/* Patch cached handicaps by name. Pairings key off player id, so they survive. */
+function migrateRoster(){
+  if((S.rosterV||1) >= ROSTER_V) return;
+  var byName={};
+  ROSTER.forEach(function(r){ byName[r[0]]=r });
+  var changed=[];
+  S.players.forEach(function(p){
+    var r=byName[p.name];
+    if(!r) return;
+    if(p.ch!==r[2]) changed.push(p.name+" "+p.ch+"→"+r[2]);
+    p.idx=r[1]; p.ch=r[2]; p.tee=r[4];
+  });
+  S.rosterV=ROSTER_V; S.cfgAt=Date.now(); saveLocal();
+  if(changed.length) setTimeout(function(){toast("Handicaps updated: "+changed.join(", "))},600);
+}
+
+/* ================= state + persistence ================= */
+var LS="pursell-cup-v2";
+var S=null, me="", view="board", openId=null, curHole=null, posting=false, pairOpen=null;
+
+function readPublished(){
+  try{
+    var el=document.getElementById("app-state");
+    var o=JSON.parse(el.textContent||"{}");
+    return (o && o.sessions) ? o : null;
+  }catch(e){return null}
+}
+function readLocal(){
+  try{var raw=localStorage.getItem(LS);return raw?JSON.parse(raw):null}catch(e){return null}
+}
+function saveLocal(){
+  try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}
+}
+
+/* Merge per match on updatedAt. Different groups edit different matches, so
+   posting your match never clobbers anybody else's. */
+function mergeResults(base,mine){
+  var out={},k;
+  for(k in base) if(Object.prototype.hasOwnProperty.call(base,k)) out[k]=base[k];
+  for(k in mine){
+    if(!Object.prototype.hasOwnProperty.call(mine,k))continue;
+    var a=out[k], b=mine[k];
+    if(!a || (b.updatedAt||0) > (a.updatedAt||0)) out[k]=b;
+  }
+  return out;
+}
+function boot(){
+  var pub=readPublished(), loc=readLocal();
+  if(pub && loc){
+    S = ((loc.cfgAt||0) > (pub.cfgAt||0)) ? loc : pub;
+    S.results = mergeResults(pub.results||{}, loc.results||{});
+  } else S = pub || loc || freshState();
+  if(!S.si) S.si=SI.slice();
+  if(!S.par) S.par=PAR.slice();
+  if(!S.results) S.results={};
+  migrateRoster();
+  normalizeDays();
+  try{ me = localStorage.getItem(LS+":me") || "" }catch(e){}
+  saveLocal();
+}
+
+function touchCfg(){ S.cfgAt=Date.now(); saveLocal(); render(); }
+function touchResult(mid,r){
+  r.updatedBy = me || "someone"; r.updatedAt = Date.now();
+  S.results[mid]=r; saveLocal(); render();
+}
+
+/* ================= golf math ================= */
+function holesOf(sess){
+  var out=[],start = sess.nine==="back"?10:1;
+  for(var i=0;i<9;i++) out.push(start+i);
+  return out;
+}
+/* Rank the nine's holes 1..9 by their 18-hole stroke index. */
+function ranksOf(sess){
+  var hs=holesOf(sess).slice();
+  hs.sort(function(x,y){return S.si[x-1]-S.si[y-1]});
+  var r={};
+  hs.forEach(function(h,i){r[h]=i+1});
+  return r;
+}
+function player(id){
+  for(var i=0;i<S.players.length;i++) if(S.players[i].id===id) return S.players[i];
+  return null;
+}
+function chOf(id){var p=player(id);return p?(Number(p.ch)||0):0}
+function nameOf(id){var p=player(id);return p?p.name:"?"}
+function sideNames(ids){
+  if(!ids||!ids.length) return "—";
+  return ids.map(nameOf).join(" / ");
+}
+function round(x){return Math.round(x)}
+
+/* Playing strokes for a match. 9-hole => half the course handicap first. */
+function allocation(match,sess){
+  var F=FORMATS[sess.format];
+  var A=(match.aIds||[]).filter(player), B=(match.bIds||[]).filter(player);
+  if(!A.length||!B.length) return {kind:"none",strokes:{},side:null,count:0};
+  var half=function(id){return chOf(id)/2};
+
+  if(F.alloc==="player"){
+    var all=A.concat(B).map(function(id){return {id:id,raw:half(id)*F.pct}});
+    var low=Math.min.apply(null,all.map(function(x){return x.raw}));
+    var st={};
+    all.forEach(function(x){st[x.id]=round(x.raw-low)});
+    return {kind:"player",strokes:st,side:null,count:0};
+  }
+  function teamCH(ids){
+    var v=ids.map(half).sort(function(x,y){return x-y});
+    if(F.alloc==="diff") return v[0];
+    return F.lo*v[0] + F.hi*(v.length>1?v[1]:v[0]);
+  }
+  var ta=teamCH(A), tb=teamCH(B), d=round(Math.abs(ta-tb));
+  return {kind:"side",side: ta>tb?"a":"b", count:d, strokes:{}};
+}
+function strokesOnHole(n,hole,ranks){
+  if(!n||n<=0) return 0;
+  return Math.floor(n/9) + (ranks[hole] <= (n%9) ? 1 : 0);
+}
+/* strokes a given player receives on a hole (player-allocation formats) */
+function pStrokes(alloc,pid,hole,ranks){
+  if(alloc.kind!=="player") return 0;
+  return strokesOnHole(alloc.strokes[pid]||0,hole,ranks);
+}
+function sideStrokes(alloc,side,hole,ranks){
+  if(alloc.kind!=="side"||alloc.side!==side) return 0;
+  return strokesOnHole(alloc.count,hole,ranks);
+}
+
+function holeWinner(match,sess,res,hole,alloc,ranks){
+  var tapped = res && res.holes && res.holes[hole];
+  if(tapped) return tapped;
+  var sc = res && res.scores && res.scores[hole];
+  if(!sc) return null;
+  var F=FORMATS[sess.format], na, nb, vals;
+  if(alloc.kind==="player"){
+    vals=function(ids){
+      var best=null;
+      for(var i=0;i<ids.length;i++){
+        var raw=sc[ids[i]];
+        if(raw==null) continue;
+        var net=raw - pStrokes(alloc,ids[i],hole,ranks);
+        if(best===null||net<best) best=net;
+      }
+      return best;
+    };
+    na=vals(match.aIds||[]); nb=vals(match.bIds||[]);
+  }else{
+    na = sc.a==null?null:sc.a - sideStrokes(alloc,"a",hole,ranks);
+    nb = sc.b==null?null:sc.b - sideStrokes(alloc,"b",hole,ranks);
+  }
+  if(na==null||nb==null) return null;
+  if(na<nb) return "A"; if(nb<na) return "B"; return "H";
+}
+
+function evalMatch(match,sess){
+  var res=S.results[match.id], alloc=allocation(match,sess), ranks=ranksOf(sess);
+  var hs=holesOf(sess), a=0,b=0,played=0,closed=false,dAt=0,rAt=0,last=0,idx=0;
+  for(var i=0;i<hs.length;i++){
+    var h=hs[i], w=holeWinner(match,sess,res,h,alloc,ranks);
+    if(!w) continue;
+    played++; last=h; idx=i+1;
+    if(w==="A")a++; else if(w==="B")b++;
+    var diff=Math.abs(a-b), rem=9-(i+1);
+    if(diff>rem){closed=true;dAt=diff;rAt=rem;break}
+  }
+  var lead=a-b, done=closed||(played>0&&idx===9), label, pa=0,pb=0;
+  if(closed){ label = rAt>0 ? dAt+"&"+rAt : dAt+" UP"; if(lead>0)pa=1;else pb=1; }
+  else if(done&&lead===0){ label="Halved"; pa=.5;pb=.5; }
+  else if(done){ label=Math.abs(lead)+" UP"; if(lead>0)pa=1;else pb=1; }
+  else if(played===0){ label="Not started"; }
+  else { label = lead===0 ? "AS thru "+idx : Math.abs(lead)+" UP thru "+idx; }
+  return {a:a,b:b,played:played,lead:lead,closed:closed,done:done,label:label,
+          pts:{a:pa,b:pb},last:last,idx:idx,alloc:alloc,ranks:ranks,res:res};
+}
+function totals(){
+  var a=0,b=0,n=0,done=0;
+  S.sessions.forEach(function(s){s.matches.forEach(function(m){
+    n++; var e=evalMatch(m,s); a+=e.pts.a; b+=e.pts.b; if(e.done)done++;
+  })});
+  return {a:a,b:b,n:n,done:done,target:n/2+0.5};
+}
+function pts(v){
+  if(v%1===0) return String(v);
+  return Math.floor(v)===0 ? "½" : Math.floor(v)+"½";
+}
+
+/* ================= sync ================= */
+var artifactNS=null, artifactTried=false;
+function ensureArtifact(){
+  if(artifactTried) return Promise.resolve(artifactNS);
+  artifactTried=true;
+  if(!window.claude||!window.claude.use) return Promise.resolve(null);
+  return window.claude.use("artifact").then(function(ns){artifactNS=ns;return ns})
+    .catch(function(){return null});
+}
+function stateTag(){
+  var json=JSON.stringify(S).replace(/</g,"\\u003c");
+  return '<script id="app-state" type="application/json">'+json+'<\/script>';
+}
+function post(){
+  if(posting) return;
+  posting=true; render();
+  ensureArtifact().then(function(ns){
+    if(!ns){ posting=false; render();
+      toast("Live board isn't available here. Your scores are saved on this phone."); return; }
+    return ns.publish(SHELL.replace(STATE_RE,stateTag())).then(function(){
+      posting=false; render(); toast("Posted to the board.");
+    }).catch(function(err){
+      posting=false; render();
+      var c=err&&err.code;
+      if(c==="conflict") toast("Someone posted first — the board refreshed. Tap Post again.");
+      else if(c==="not_granted"||c==="not_writer") toast("You have view-only access. Ask Trevor for edit rights.");
+      else toast("Couldn't reach the board. Your scores are safe on this phone.");
+    });
+  });
+}
+var toastT=null;
+function toast(msg){
+  var el=document.getElementById("toast");
+  el.textContent=msg; el.classList.add("on");
+  if(toastT)clearTimeout(toastT);
+  toastT=setTimeout(function(){el.classList.remove("on")},3600);
+}
+
+/* ================= render helpers ================= */
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function el(html){var d=document.createElement("div");d.innerHTML=html;return d.firstElementChild}
+function tugHTML(lead,cap,goal){
+  var c=Math.max(-cap,Math.min(cap,lead)), pos=50+(c/cap)*50;
+  var left=Math.min(50,pos), w=Math.abs(pos-50);
+  var g="";
+  if(goal){
+    var gp=50+(goal/cap)*50;
+    g='<span class="tug-goal" style="left:'+Math.min(99.5,gp)+'%"></span>'+
+      '<span class="tug-goal" style="left:'+Math.max(.5,100-gp)+'%"></span>';
+  }
+  return '<div class="tug"><span class="tug-fill" style="left:'+left+'%;width:'+w+'%;background:'+
+    (lead>=0?"var(--a)":"var(--b)")+'"></span><span class="tug-mid"></span>'+g+'</div>';
+}
+
+/* ================= header ================= */
+function renderHeader(){
+  var t=totals(), h=document.getElementById("hdr");
+  h.innerHTML=
+    '<div class="hdr-top"><span class="eyebrow">'+esc(S.event)+' · '+esc(S.course)+'</span>'+
+      '<button class="eyebrow" id="theme" style="min-height:32px;padding:0 6px" aria-label="Switch theme">◐</button></div>'+
+    '<div class="score-row">'+
+      '<div><div class="tname" style="color:var(--a)">'+esc(S.teams.a.name)+'</div>'+
+        '<div class="num tscore" style="color:var(--a)">'+pts(t.a)+'</div></div>'+
+      '<div class="target">'+pts(t.target)+' to win</div>'+
+      '<div style="text-align:right"><div class="tname" style="color:var(--b)">'+esc(S.teams.b.name)+'</div>'+
+        '<div class="num tscore" style="color:var(--b)">'+pts(t.b)+'</div></div>'+
+    '</div>'+
+    tugHTML(t.a-t.b, Math.max(3,t.target), t.target)+
+    '<div class="eyebrow" style="text-align:center;margin-top:6px">'+
+      (t.a+t.b)+' of '+t.n+' points decided</div>';
+  h.querySelector("#theme").onclick=function(){
+    var r=document.documentElement, cur=r.getAttribute("data-theme");
+    var dark=window.matchMedia&&window.matchMedia("(prefers-color-scheme:dark)").matches;
+    var next = cur ? (cur==="dark"?"light":"dark") : (dark?"light":"dark");
+    r.setAttribute("data-theme",next);
+    try{localStorage.setItem(LS+":theme",next)}catch(e){}
+  };
+}
+
+/* ================= board ================= */
+function renderBoard(){
+  var live=[];
+  S.sessions.forEach(function(s){s.matches.forEach(function(m){
+    var e=evalMatch(m,s); if(e.played>0&&!e.done) live.push([m,s,e]);
+  })});
+  var html="";
+
+  if(!S.players.length){
+    html+='<div class="banner banner-warn"><strong>No players yet.</strong> Open Setup and add your 20 names '+
+      'with handicaps — every stroke allocation runs off those numbers.</div>';
+  }
+  if(live.length){
+    html+='<section class="sec"><div class="sec-h"><h2 style="font-size:15px">On the course</h2>'+
+      '<span class="eyebrow">'+live.length+' live</span></div>'+
+      live.map(function(x){return mrowHTML(x[0],x[1],x[2])}).join("")+'</section>';
+  }
+
+  var days={};
+  S.sessions.forEach(function(s){ (days[s.day]=days[s.day]||[]).push(s) });
+  html+='<section class="sec"><h2 style="font-size:15px">Schedule</h2>';
+  Object.keys(days).forEach(function(d){
+    html+='<div class="eyebrow" style="margin-top:6px">'+esc(d)+'</div>';
+    days[d].forEach(function(s){
+      var a=0,b=0,fin=0;
+      s.matches.forEach(function(m){var e=evalMatch(m,s);a+=e.pts.a;b+=e.pts.b;if(e.done)fin++});
+      var F=FORMATS[s.format];
+      html+='<button class="card" style="width:100%;text-align:left;display:block" data-sess="'+s.id+'">'+
+        '<div class="sec-h" style="margin-bottom:9px"><div>'+
+          '<h3 style="font-size:16px">'+esc(F.label)+'</h3>'+
+          '<div class="eyebrow" style="margin-top:3px">'+esc(nineName(s))+' · '+esc(F.note)+'</div></div>'+
+        '<div class="num" style="font-size:21px;white-space:nowrap">'+
+          '<span style="color:var(--a)">'+pts(a)+'</span>'+
+          '<span style="color:var(--ink-3)">–</span>'+
+          '<span style="color:var(--b)">'+pts(b)+'</span></div></div>'+
+        tugHTML(a-b,Math.max(2,s.matches.length))+
+        '<div class="eyebrow" style="margin-top:6px">'+fin+' of '+s.matches.length+' final</div>'+
+      '</button>';
+    });
+  });
+  html+='</section>';
+  return html;
+}
+function mrowHTML(m,s,e){
+  var col = e.lead>0?"var(--a)":e.lead<0?"var(--b)":"var(--halve)";
+  var F=FORMATS[s.format];
+  return '<button class="mrow" data-match="'+m.id+'" style="border-left-color:'+(e.played?col:"var(--line)")+'">'+
+    '<div class="mrow-top"><div style="min-width:0;flex:1">'+
+      '<div class="side side-a">'+esc(sideNames(m.aIds))+'</div>'+
+      '<div class="side side-b">'+esc(sideNames(m.bIds))+'</div></div>'+
+    '<div class="mstat"><div class="num" style="color:'+(e.played?"var(--ink)":"var(--ink-3)")+'">'+
+      esc(e.label)+'</div>'+
+      (e.done?'<span class="pill pill-final" style="margin-top:4px">Final</span>':
+       e.played?'<span class="pill pill-live" style="margin-top:4px">Live</span>':'')+
+    '</div></div>'+
+    (e.played?'<div style="margin-top:9px">'+tugHTML(e.lead,5)+'</div>':'')+
+    '<div class="eyebrow" style="margin-top:7px">'+esc(sessName(s))+' · '+esc(F.label)+'</div></button>';
+}
+
+/* ================= matches list ================= */
+var tab=null;
+function renderMatches(){
+  if(!tab||!S.sessions.some(function(s){return s.id===tab})) tab=S.sessions[0].id;
+  var s=S.sessions.filter(function(x){return x.id===tab})[0], F=FORMATS[s.format];
+  var html='<div class="strip" style="padding-bottom:4px">'+
+    S.sessions.map(function(x){
+      var on=x.id===tab;
+      return '<button class="btn" data-tab="'+x.id+'" style="flex:0 0 auto;min-height:42px;padding:0 13px;font-size:13px;'+
+        (on?"background:var(--ink);color:var(--ground);border-color:var(--ink)":"")+'">'+esc(sessName(x))+'</button>';
+    }).join("")+'</div>'+
+    '<div class="banner banner-info"><strong>'+esc(F.label)+'</strong> · '+esc(nineName(s))+' · '+esc(F.note)+
+      ' · handicaps halved for nine holes</div>'+
+    '<section class="sec">'+s.matches.map(function(m){
+      return mrowHTML(m,s,evalMatch(m,s))}).join("")+'</section>';
+  return html;
+}
+
+/* ================= match screen ================= */
+function findMatch(id){
+  for(var i=0;i<S.sessions.length;i++){
+    var s=S.sessions[i];
+    for(var j=0;j<s.matches.length;j++) if(s.matches[j].id===id) return {m:s.matches[j],s:s,i:j};
+  }
+  return null;
+}
+function renderMatch(){
+  var f=findMatch(openId); if(!f) {openId=null; return renderBoard()}
+  var m=f.m, s=f.s, F=FORMATS[s.format], e=evalMatch(m,s);
+  var hs=holesOf(s), res=S.results[m.id]||{holes:{},scores:{}};
+  var mode=res.mode||"tap";
+  if(curHole==null||hs.indexOf(curHole)<0) curHole = e.last ? Math.min(hs[8],e.last+1) : hs[0];
+  var h=curHole;
+
+  var html='<div class="sec-h"><button class="btn" id="back" style="min-height:42px">← Back</button>'+
+    '<span class="eyebrow">'+esc(sessName(s))+' · '+esc(F.label)+'</span></div>';
+
+  /* summary */
+  html+='<div class="card"><div class="mrow-top" style="margin-bottom:9px">'+
+    '<div style="min-width:0;flex:1">'+
+      '<div class="side side-a">'+esc(sideNames(m.aIds))+'</div>'+
+      '<div class="side side-b">'+esc(sideNames(m.bIds))+'</div></div>'+
+    '<div class="num" style="font-size:19px">'+esc(e.label)+'</div></div>'+
+    tugHTML(e.lead,5)+ allocLine(m,e.alloc,s) +
+    (res.updatedAt?'<div class="eyebrow" style="margin-top:6px">Last entry by '+esc(res.updatedBy||"someone")+
+      ' · '+ago(res.updatedAt)+'</div>':'')+
+    '</div>';
+
+  if(e.closed) html+='<div class="banner banner-info">Match closed out at <strong>'+esc(e.label)+
+    '</strong>. Later holes won’t change it — you can still fix an earlier hole.</div>';
+  if(!m.aIds.length||!m.bIds.length) html+='<div class="banner banner-warn">'+
+    'This match has no players set. Add them in Setup so strokes calculate.</div>';
+
+  /* hole strip */
+  html+='<div class="strip">'+hs.map(function(x){
+    var w=holeWinner(m,s,res,x,e.alloc,e.ranks);
+    var c = w==="A"?"var(--a)":w==="B"?"var(--b)":w==="H"?"var(--halve)":"var(--line-hi)";
+    return '<button class="hchip" data-hole="'+x+'" aria-current="'+(x===h)+'">'+
+      '<span class="num n">'+x+'</span><span class="dot" style="background:'+c+'"></span>'+
+      '<span class="par">PAR '+S.par[x-1]+'</span></button>';
+  }).join("")+'</div>';
+
+  /* entry */
+  html+='<div class="card"><div class="sec-h" style="margin-bottom:12px">'+
+    '<h2 style="font-size:19px">Hole '+h+'</h2>'+
+    '<span class="eyebrow">Par '+S.par[h-1]+' · SI '+S.si[h-1]+' · #'+e.ranks[h]+' on this nine</span></div>';
+
+  if(mode==="tap"){
+    var w=holeWinner(m,s,res,h,e.alloc,e.ranks);
+    var opts=[["A",S.teams.a.name,"var(--a)"],["H","Halve","var(--halve)"],["B",S.teams.b.name,"var(--b)"]];
+    html+='<div class="tap3">'+opts.map(function(o){
+      var on=w===o[0];
+      return '<button class="tapbtn" data-tap="'+o[0]+'" aria-pressed="'+on+'" style="'+
+        (on?"background:"+o[2]+";border-color:"+o[2]:"color:"+o[2]+";border-color:var(--line)")+'">'+
+        esc(o[1])+'</button>';
+    }).join("")+'</div>';
+    html+=shotHint(m,s,e,h);
+  }else{
+    html+='<div>'+scoreRows(m,s,e,h,res)+'</div>';
+    var w2=holeWinner(m,s,res,h,e.alloc,e.ranks);
+    if(w2) html+='<div class="mini" style="text-align:center;margin-top:10px;font-weight:600">'+
+      (w2==="H"?"Hole halved":esc(S.teams[w2.toLowerCase()].name)+" wins the hole")+'</div>';
+  }
+
+  html+='<div class="sec-h" style="margin-top:14px;gap:8px">'+
+    '<button class="btn" id="prev" style="min-height:44px"'+(hs.indexOf(h)===0?" disabled":"")+'>Prev</button>'+
+    '<button class="eyebrow" id="mode" style="text-decoration:underline;min-height:44px;padding:0 4px">'+
+      (mode==="tap"?"Enter scores":"Tap winner")+'</button>'+
+    '<button class="btn btn-solid" id="next" style="min-height:44px"'+(hs.indexOf(h)===8?" disabled":"")+'>Next</button>'+
+    '</div></div>';
+
+  html+='<button class="btn btn-solid" id="post" style="width:100%"'+(posting?" disabled":"")+'>'+
+    (posting?"Posting…":"Post to the board")+'</button>'+
+    '<div class="mini" style="text-align:center;margin-top:-8px">Scores save on this phone instantly. '+
+    'Posting shares them with everyone.</div>';
+  return html;
+}
+function allocLine(m,alloc,s){
+  if(alloc.kind==="none") return "";
+  if(alloc.kind==="side"){
+    if(!alloc.count) return '<div class="eyebrow" style="margin-top:8px">No strokes — even match</div>';
+    return '<div class="eyebrow" style="margin-top:8px">'+esc(S.teams[alloc.side].name)+
+      ' gets '+alloc.count+' stroke'+(alloc.count===1?"":"s")+' over the nine</div>';
+  }
+  var ids=(m.aIds||[]).concat(m.bIds||[]);
+  var bits=ids.filter(function(id){return player(id)}).map(function(id){
+    return esc(nameOf(id))+" "+(alloc.strokes[id]?"+"+alloc.strokes[id]:"scr")});
+  return '<div class="eyebrow" style="margin-top:8px">'+bits.join(" · ")+'</div>';
+}
+function shotHint(m,s,e,h){
+  var bits=[];
+  if(e.alloc.kind==="side"){
+    var n=sideStrokes(e.alloc,e.alloc.side,h,e.ranks);
+    if(n) bits.push(esc(S.teams[e.alloc.side].name)+" gets "+n+" here");
+  }else if(e.alloc.kind==="player"){
+    (m.aIds||[]).concat(m.bIds||[]).forEach(function(id){
+      if(!player(id))return;
+      var n=pStrokes(e.alloc,id,h,e.ranks);
+      if(n) bits.push(esc(nameOf(id))+" −"+n);
+    });
+  }
+  if(!bits.length) return '<div class="mini" style="text-align:center;margin-top:10px">No strokes on this hole</div>';
+  return '<div class="mini" style="text-align:center;margin-top:10px"><span class="shot">'+
+    bits.join(" · ")+'</span></div>';
+}
+function scoreRows(m,s,e,h,res){
+  var sc=(res.scores&&res.scores[h])||{};
+  if(e.alloc.kind==="player"){
+    return ["a","b"].map(function(side){
+      var ids=(side==="a"?m.aIds:m.bIds)||[];
+      return ids.filter(function(id){return player(id)}).map(function(id){
+        var n=pStrokes(e.alloc,id,h,e.ranks);
+        return '<div class="pentry"><div style="flex:1;min-width:0">'+
+          '<div class="side side-'+side+'">'+esc(nameOf(id))+'</div>'+
+          (n?'<span class="shot">−'+n+' stroke'+(n===1?"":"s")+' here</span>':
+             '<span class="mini">no stroke</span>')+'</div>'+
+          '<input type="number" inputmode="numeric" min="1" max="15" data-score="'+id+'" '+
+          'value="'+(sc[id]==null?"":sc[id])+'" placeholder="–" aria-label="Score for '+esc(nameOf(id))+'"></div>';
+      }).join("");
+    }).join("");
+  }
+  return ["a","b"].map(function(side){
+    var n=sideStrokes(e.alloc,side,h,e.ranks);
+    return '<div class="pentry"><div style="flex:1;min-width:0">'+
+      '<div class="side side-'+side+'">'+esc(sideNames(side==="a"?m.aIds:m.bIds))+'</div>'+
+      (n?'<span class="shot">−'+n+' stroke'+(n===1?"":"s")+' here</span>':
+         '<span class="mini">no stroke</span>')+'</div>'+
+      '<input type="number" inputmode="numeric" min="1" max="15" data-score="'+side+'" '+
+      'value="'+(sc[side]==null?"":sc[side])+'" placeholder="–"></div>';
+  }).join("");
+}
+function ago(t){
+  var m=Math.round((Date.now()-t)/60000);
+  if(m<1) return "just now";
+  if(m<60) return m+"m ago";
+  return Math.round(m/60)+"h ago";
+}
+
+/* ================= setup ================= */
+var bulk="";
+function renderSetup(){
+  var ca=S.players.filter(function(p){return p.team==="a"}).length;
+  var cb=S.players.filter(function(p){return p.team==="b"}).length;
+  var html="";
+
+  html+='<div class="card"><h2 style="font-size:16px;margin-bottom:9px">Your name</h2>'+
+    '<div class="mini" style="margin-bottom:8px">Stamped on every hole you enter, so the group knows who posted what.</div>'+
+    '<input id="me" value="'+esc(me)+'" placeholder="Your name"></div>';
+
+  html+='<div class="card"><h2 style="font-size:16px;margin-bottom:9px">Teams</h2><div class="row">'+
+    ["a","b"].map(function(k){
+      return '<div style="flex:1;min-width:130px"><div class="eyebrow" style="margin-bottom:5px">'+
+        (k==="a"?ca:cb)+' players</div>'+
+        '<input data-team="'+k+'" value="'+esc(S.teams[k].name)+'" style="color:var(--'+k+');font-weight:700">'+
+        '</div>';
+    }).join("")+'</div></div>';
+
+  html+='<div class="card"><h2 style="font-size:16px;margin-bottom:6px">Roster</h2>'+
+    '<div class="mini" style="margin-bottom:9px">One player per line, <strong>name then course handicap</strong>. '+
+    'Example: <code>Trevor 8</code>. Handicaps drive every allocation — the app halves them for nine holes.</div>'+
+    '<textarea id="bulk" rows="4" placeholder="Trevor 8&#10;Dave 14&#10;Mike 12">'+esc(bulk)+'</textarea>'+
+    '<div class="row" style="margin-top:9px">'+
+      '<button class="btn" data-add="a" style="flex:1;color:var(--a);border-color:var(--a)">Add to '+esc(S.teams.a.name)+'</button>'+
+      '<button class="btn" data-add="b" style="flex:1;color:var(--b);border-color:var(--b)">Add to '+esc(S.teams.b.name)+'</button>'+
+    '</div>';
+  if(S.players.length){
+    html+='<div class="scroll-x" style="margin-top:12px"><table><thead><tr>'+
+      '<th>Player</th><th class="n">CH</th><th class="n">Team</th><th></th></tr></thead><tbody>'+
+      S.players.map(function(p){
+        return '<tr><td><input data-pn="'+p.id+'" value="'+esc(p.name)+'" style="min-height:38px;border:none;background:none;padding:2px 0">'+
+        (p.idx!=null?'<div class="eyebrow">Index '+esc(p.idx)+
+          (p.tee==="BC"?' · <span style="color:var(--warn)">Bobcat tees</span>':'')+'</div>':'')+'</td>'+
+        '<td class="n"><input type="number" data-pc="'+p.id+'" value="'+esc(p.ch)+'" style="width:58px;min-height:38px;text-align:right;padding:2px 4px"></td>'+
+        '<td class="n"><button class="pill" data-swap="'+p.id+'" style="background:var(--'+p.team+'-soft);color:var(--'+p.team+')">'+
+          esc(S.teams[p.team].name)+'</button></td>'+
+        '<td class="n"><button data-del="'+p.id+'" class="eyebrow" style="color:var(--a)">Remove</button></td></tr>';
+      }).join("")+'</tbody></table></div>';
+  }else html+='<div class="eyebrow" style="margin-top:12px">No players yet</div>';
+  html+='</div>';
+
+  /* pairings — set per day, mirrored across that day's two nines */
+  html+='<div class="card"><h2 style="font-size:16px;margin-bottom:4px">Pairings</h2>'+
+    '<div class="mini" style="margin-bottom:10px">Groups are set once per day and play both nines together. '+
+    'The two formats allocate strokes differently, so each nine shows its own under every match.</div>';
+  dayList().forEach(function(d){
+    var peers=dayPeers(d), lead=peers[0], open=pairOpen===d;
+    var filled=lead.matches.filter(function(m){return m.aIds.length&&m.bIds.length}).length;
+    html+='<div style="display:flex;align-items:center;gap:7px;padding:9px 0;border-bottom:1px solid var(--sunk)">'+
+      '<button data-pairopen="'+esc(d)+'" style="flex:1;min-width:0;text-align:left;min-height:40px">'+
+        '<div style="font-weight:600;font-size:14px">'+(open?"▾":"▸")+' '+esc(d)+'</div>'+
+        '<div class="eyebrow">'+peers.map(function(p){
+            return esc(nineName(p))+" "+esc(FORMATS[p.format].label)}).join(" · ")+
+          ' · '+filled+'/'+lead.matches.length+' set</div></button>'+
+      '<button class="btn" data-swapnine="'+esc(d)+'" style="min-height:40px;padding:0 10px;font-size:12px">Swap</button>'+
+      '<button class="btn" data-pair="'+esc(d)+'" style="min-height:40px;padding:0 11px;font-size:13px">Shuffle</button></div>';
+    if(open) html+=pairEditor(peers);
+  });
+  html+='<button class="btn" id="pairall" style="width:100%;margin-top:12px">Auto-pair all three days</button></div>';
+
+  /* stroke index */
+  html+='<div class="card"><h2 style="font-size:16px;margin-bottom:6px">Course</h2>'+
+    '<div class="mini" style="margin-bottom:10px">FarmLinks stroke index, preloaded from the Longhorn scorecard. '+
+    'Each nine is ranked 1–9 internally for nine-hole matches.</div>'+
+    '<div class="grid9">'+S.si.map(function(v,i){
+      return '<div><div class="eyebrow" style="text-align:center;margin-bottom:3px">H'+(i+1)+
+        ' · P'+S.par[i]+'</div>'+
+        '<input type="number" min="1" max="18" data-si="'+i+'" value="'+v+'" style="text-align:center;min-height:42px;padding:4px">'+
+        '</div>';
+    }).join("")+'</div></div>';
+
+  html+='<div class="card"><h2 style="font-size:16px;margin-bottom:9px">Board</h2>'+
+    '<div class="mini" style="margin-bottom:10px">Holes save on this phone the instant you tap them. '+
+    'Posting pushes them to everyone — after each hole, or once at the turn.</div>'+
+    '<button class="btn btn-solid" id="post2" style="width:100%"'+(posting?" disabled":"")+'>'+
+      (posting?"Posting…":"Post everything to the board")+'</button>'+
+    '<div class="row" style="margin-top:9px;flex-wrap:nowrap">'+
+      '<button class="btn" id="pull" style="flex:1;font-size:13px">Refresh from board</button>'+
+      '<button class="btn" id="discard" style="flex:1;font-size:13px">Discard my unposted</button></div>'+
+    '<div style="margin-top:15px;padding-top:12px;border-top:1px solid var(--sunk)">'+
+      '<div class="eyebrow" style="margin-bottom:7px">Captains only</div>'+
+      '<button class="btn btn-danger" id="wipe" style="width:100%;font-size:13px">Wipe every score in the event</button>'+
+    '</div></div>';
+  return html;
+}
+
+/* Hand-pairing editor for one day. Slots write to the day's first session and
+   mirror to the other nine; each nine's stroke allocation is shown separately,
+   because the same group gets very different shots under different formats. */
+function pairEditor(peers){
+  var lead=peers[0], F=FORMATS[lead.format], used={};
+  lead.matches.forEach(function(m){
+    m.aIds.concat(m.bIds).forEach(function(id){used[id]=true});
+  });
+  function slot(m,side,k,cur){
+    var opts='<option value="">— open —</option>';
+    S.players.filter(function(p){return p.team===side}).forEach(function(p){
+      var taken=used[p.id]&&p.id!==cur;
+      opts+='<option value="'+p.id+'"'+(p.id===cur?" selected":"")+(taken?" disabled":"")+'>'+
+        esc(p.name)+' ('+p.ch+')'+(taken?" · out":"")+'</option>';
+    });
+    return '<select data-slot="'+lead.id+'|'+m.id+'|'+side+'|'+k+'" '+
+      'style="flex:1;min-width:0;font-size:13px;min-height:44px;color:var(--'+side+');font-weight:600">'+opts+'</select>';
+  }
+  return '<div style="padding:8px 0 4px">'+lead.matches.map(function(m,i){
+    var rows=["a","b"].map(function(side){
+      var ids=(side==="a"?m.aIds:m.bIds), cells="";
+      for(var k=0;k<F.per;k++) cells+=slot(m,side,k,ids[k]);
+      return '<div class="row" style="margin-bottom:6px;flex-wrap:nowrap">'+cells+'</div>';
+    }).join("");
+    var hints=peers.map(function(p){
+      var pm=p.matches[i];
+      if(!pm) return "";
+      return '<div class="mini" style="margin-top:4px">'+esc(nineName(p))+' · '+
+        esc(FORMATS[p.format].label)+' — '+pairHint(pm,p)+'</div>';
+    }).join("");
+    return '<div style="border:1px solid var(--line);border-radius:9px;padding:10px;margin-bottom:8px">'+
+      '<div class="eyebrow" style="margin-bottom:7px">Match '+(i+1)+'</div>'+rows+hints+'</div>';
+  }).join("")+'</div>';
+}
+function pairHint(m,s){
+  var al=allocation(m,s);
+  if(al.kind==="none") return "Set both sides to see strokes";
+  if(al.kind==="side") return al.count
+    ? '<span class="shot">'+esc(S.teams[al.side].name)+' +'+al.count+' over the nine</span>'
+    : "Even — no strokes";
+  var bits=m.aIds.concat(m.bIds).filter(player).map(function(id){
+    return esc(nameOf(id))+(al.strokes[id]?" +"+al.strokes[id]:" scr")});
+  return bits.length?'<span class="shot">'+bits.join(" · ")+'</span>':"Set both sides to see strokes";
+}
+
+/* ================= events ================= */
+function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
+function autoPair(s){
+  var per=FORMATS[s.format].per;
+  var pool={a:shuffle(S.players.filter(function(p){return p.team==="a"}).map(function(p){return p.id})),
+            b:shuffle(S.players.filter(function(p){return p.team==="b"}).map(function(p){return p.id}))};
+  s.matches.forEach(function(m){ m.aIds=pool.a.splice(0,per); m.bIds=pool.b.splice(0,per) });
+}
+function parseRoster(text,team){
+  return text.split("\n").map(function(l){return l.trim()}).filter(Boolean).map(function(l){
+    var mm=l.match(/^(.*?)[\s,]+(\-?\d+(?:\.\d+)?)\s*$/);
+    return mm ? {id:uid(),name:mm[1].trim(),ch:Number(mm[2]),team:team}
+              : {id:uid(),name:l,ch:0,team:team};
+  });
+}
+
+function wire(root){
+  function on(sel,ev,fn){Array.prototype.forEach.call(root.querySelectorAll(sel),function(n){n.addEventListener(ev,fn)})}
+
+  on("[data-match]","click",function(){openId=this.getAttribute("data-match");curHole=null;view="match";render()});
+  on("[data-sess]","click",function(){tab=this.getAttribute("data-sess");view="matches";render()});
+  on("[data-tab]","click",function(){tab=this.getAttribute("data-tab");render()});
+  on("[data-hole]","click",function(){curHole=+this.getAttribute("data-hole");render()});
+
+  var back=root.querySelector("#back"); if(back)back.onclick=function(){openId=null;view="board";render()};
+  var prev=root.querySelector("#prev"); if(prev)prev.onclick=function(){var f=findMatch(openId),hs=holesOf(f.s);
+    curHole=hs[Math.max(0,hs.indexOf(curHole)-1)];render()};
+  var next=root.querySelector("#next"); if(next)next.onclick=function(){var f=findMatch(openId),hs=holesOf(f.s);
+    curHole=hs[Math.min(8,hs.indexOf(curHole)+1)];render()};
+
+  on("[data-tap]","click",function(){
+    var v=this.getAttribute("data-tap"), r=S.results[openId]||{holes:{},scores:{}};
+    r.holes=r.holes||{};
+    if(r.holes[curHole]===v) delete r.holes[curHole]; else r.holes[curHole]=v;
+    touchResult(openId,r);
+  });
+  on("[data-score]","change",function(){
+    var k=this.getAttribute("data-score"), r=S.results[openId]||{holes:{},scores:{}};
+    r.scores=r.scores||{}; r.scores[curHole]=r.scores[curHole]||{};
+    var v=this.value===""?null:Math.max(1,Math.min(15,parseInt(this.value,10)||0));
+    r.scores[curHole][k]=v; touchResult(openId,r);
+  });
+  var md=root.querySelector("#mode"); if(md)md.onclick=function(){
+    var r=S.results[openId]||{holes:{},scores:{}};
+    r.mode=(r.mode||"tap")==="tap"?"scores":"tap"; touchResult(openId,r);
+  };
+  var p1=root.querySelector("#post"); if(p1)p1.onclick=post;
+  var p2=root.querySelector("#post2"); if(p2)p2.onclick=post;
+
+  var meIn=root.querySelector("#me"); if(meIn)meIn.oninput=function(){
+    me=this.value; try{localStorage.setItem(LS+":me",me)}catch(e){}};
+  var bl=root.querySelector("#bulk"); if(bl)bl.oninput=function(){bulk=this.value};
+  on("[data-add]","click",function(){
+    var t=this.getAttribute("data-add"), add=parseRoster(bulk,t);
+    if(!add.length){toast("Type at least one name first.");return}
+    S.players=S.players.concat(add); bulk=""; touchCfg();
+    toast("Added "+add.length+" to "+S.teams[t].name+".");
+  });
+  on("[data-team]","input",function(){S.teams[this.getAttribute("data-team")].name=this.value;S.cfgAt=Date.now();saveLocal()});
+  on("[data-pn]","input",function(){var p=player(this.getAttribute("data-pn"));if(p){p.name=this.value;S.cfgAt=Date.now();saveLocal()}});
+  on("[data-pc]","input",function(){var p=player(this.getAttribute("data-pc"));if(p){p.ch=Number(this.value)||0;S.cfgAt=Date.now();saveLocal()}});
+  on("[data-swap]","click",function(){var p=player(this.getAttribute("data-swap"));if(p){p.team=p.team==="a"?"b":"a";touchCfg()}});
+  on("[data-del]","click",function(){
+    var id=this.getAttribute("data-del");
+    S.players=S.players.filter(function(p){return p.id!==id});
+    S.sessions.forEach(function(s){s.matches.forEach(function(m){
+      m.aIds=m.aIds.filter(function(x){return x!==id});
+      m.bIds=m.bIds.filter(function(x){return x!==id});
+    })});
+    touchCfg();
+  });
+  on("[data-pair]","click",function(){
+    var lead=dayPeers(this.getAttribute("data-pair"))[0];
+    autoPair(lead); syncDay(lead); touchCfg();
+    toast(lead.day+" paired — both nines.");
+  });
+  on("[data-swapnine]","click",function(){
+    dayPeers(this.getAttribute("data-swapnine")).forEach(function(s){
+      s.nine = s.nine==="back"?"front":"back";
+    });
+    touchCfg();
+  });
+  on("[data-pairopen]","click",function(){
+    var id=this.getAttribute("data-pairopen");
+    pairOpen = pairOpen===id ? null : id; render();
+  });
+  on("[data-slot]","change",function(){
+    var p=this.getAttribute("data-slot").split("|"), val=this.value;
+    var s=S.sessions.filter(function(x){return x.id===p[0]})[0];
+    var m=s.matches.filter(function(x){return x.id===p[1]})[0];
+    var side=p[2], k=+p[3];
+    var ids=(side==="a"?m.aIds:m.bIds).slice();
+    while(ids.length<=k) ids.push(null);
+    ids[k]= val||null;
+    var clean=ids.filter(Boolean).filter(function(x,i,arr){return arr.indexOf(x)===i});
+    if(side==="a") m.aIds=clean; else m.bIds=clean;
+    /* a player can only be in one match per session */
+    if(val) s.matches.forEach(function(mm){
+      if(mm.id===m.id) return;
+      mm.aIds=mm.aIds.filter(function(x){return x!==val});
+      mm.bIds=mm.bIds.filter(function(x){return x!==val});
+    });
+    syncDay(s);
+    touchCfg();
+  });
+  var pa=root.querySelector("#pairall"); if(pa)pa.onclick=function(){
+    dayList().forEach(function(d){ var lead=dayPeers(d)[0]; autoPair(lead); syncDay(lead) });
+    touchCfg(); toast("All three days paired.")};
+  on("[data-si]","change",function(){
+    var i=+this.getAttribute("data-si");
+    S.si[i]=Math.max(1,Math.min(18,parseInt(this.value,10)||1)); touchCfg();
+  });
+  var pl=root.querySelector("#pull"); if(pl)pl.onclick=function(){ location.reload() };
+  var dc=root.querySelector("#discard"); if(dc)dc.onclick=function(){
+    if(this.getAttribute("data-armed")){ S.results={}; saveLocal(); location.reload() }
+    else{ this.setAttribute("data-armed","1"); this.textContent="Tap again — drops unposted holes" }
+  };
+  /* Three taps. Twenty people share this board and it wipes the whole event. */
+  var wp=root.querySelector("#wipe"); if(wp)wp.onclick=function(){
+    var n=(+this.getAttribute("data-armed")||0)+1;
+    if(n<3){
+      this.setAttribute("data-armed",n);
+      this.textContent = n===1 ? "Tap twice more to wipe all six sessions"
+                               : "Tap once more — this cannot be undone";
+      return;
+    }
+    S.results={}; saveLocal(); render();
+    toast("Every score cleared on this phone. Post to wipe the shared board.");
+  };
+}
+
+/* ================= shell ================= */
+function renderNav(){
+  var n=document.getElementById("nav");
+  var items=[["board","Board"],["matches","Matches"],["setup","Setup"]];
+  n.innerHTML=items.map(function(i){
+    return '<button data-view="'+i[0]+'"'+(view===i[0]&&!openId?' aria-current="page"':'')+'>'+i[1]+'</button>';
+  }).join("");
+  Array.prototype.forEach.call(n.querySelectorAll("[data-view]"),function(b){
+    b.onclick=function(){view=b.getAttribute("data-view");openId=null;render()};
+  });
+}
+function render(){
+  renderHeader(); renderNav();
+  var m=document.getElementById("main");
+  m.innerHTML = openId ? renderMatch() : view==="board" ? renderBoard() :
+                view==="matches" ? renderMatches() : renderSetup();
+  wire(m);
+  document.getElementById("nav").classList.toggle("hide", !!openId);
+}
+
+try{var th=localStorage.getItem(LS+":theme"); if(th)document.documentElement.setAttribute("data-theme",th)}catch(e){}
+boot();
+render();
+ensureArtifact();
+})();
+</script>
