@@ -14,3 +14,6 @@ npm-debug.log*
 
 # Artifact reads pulled down for merging — transient, never commit
 artifact-*.html
+
+# build output carrying live scores - never commit
+dist/

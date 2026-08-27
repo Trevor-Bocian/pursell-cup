@@ -208,6 +208,7 @@ function syncDay(s){
       if(!p.matches[i]) return;
       p.matches[i].aIds=m.aIds.slice();
       p.matches[i].bIds=m.bIds.slice();
+      stamp(p.matches[i]);
     });
   });
 }
@@ -221,6 +222,7 @@ function normalizeDays(){
         var pm=p.matches[i];
         if(!pm || pm.aIds.length || pm.bIds.length) return;
         pm.aIds=m.aIds.slice(); pm.bIds=m.bIds.slice();
+        pm.at = m.at || pm.at || 0;   /* inherit, don't invent a fresh edit time */
       });
     });
   });
@@ -258,10 +260,10 @@ function freshState(){
     v:2, rosterV:ROSTER_V, event:"Barn Burner", course:"FarmLinks at Pursell Farms",
     teams:{a:{name:"Trevor"},b:{name:"Andrew"}},
     players:ROSTER.map(function(r){
-      return {id:uid(),name:r[0],idx:r[1],ch:r[2],team:r[3],tee:r[4]};
+      return {id:uid(),name:r[0],idx:r[1],ch:r[2],team:r[3],tee:r[4],at:Date.now()};
     }),
     sessions:buildSchedule(), si:SI.slice(), par:PAR.slice(),
-    results:{}, cfgAt:Date.now()
+    results:{}, removed:{}, cfgAt:Date.now()
   };
 }
 /* Patch cached handicaps by name. Pairings key off player id, so they survive. */
@@ -274,7 +276,7 @@ function migrateRoster(){
     var r=byName[p.name];
     if(!r) return;
     if(p.ch!==r[2]) changed.push(p.name+" "+p.ch+"→"+r[2]);
-    p.idx=r[1]; p.ch=r[2]; p.tee=r[4];
+    p.idx=r[1]; p.ch=r[2]; p.tee=r[4]; stamp(p);
   });
   S.rosterV=ROSTER_V; S.cfgAt=Date.now(); saveLocal();
   if(changed.length) setTimeout(function(){toast("Handicaps updated: "+changed.join(", "))},600);
@@ -310,15 +312,92 @@ function mergeResults(base,mine){
   }
   return out;
 }
+
+/* ---- per-entity config merge -------------------------------------------
+   Every phone publishes its whole state when its scorer posts a hole. Taking
+   config wholesale from whichever copy is newer meant a phone that loaded
+   before an edit would push its stale roster back over the board.
+
+   So players, matches and sessions each carry their own `at` stamp and merge
+   individually. A stale phone can still briefly publish an old value, but the
+   moment any phone holding the newer edit loads or posts, the newer stamp
+   wins and stays won. The board heals itself instead of flip-flopping. */
+function stamp(x){ if(x) x.at=Date.now(); return x }
+function byId(arr){ var m={}; (arr||[]).forEach(function(x){ if(x&&x.id) m[x.id]=x }); return m }
+function newer(a,b){
+  if(!a) return b;
+  if(!b) return a;
+  return ((b.at||0) > (a.at||0)) ? b : a;
+}
+/* Backfill stamps on state written before this scheme existed, using the
+   snapshot's own cfgAt — a fair proxy for "as old as everything else here". */
+function stampMissing(st){
+  if(!st) return st;
+  var base = st.cfgAt||0;
+  (st.players||[]).forEach(function(p){ if(!p.at) p.at=base });
+  (st.sessions||[]).forEach(function(s){
+    if(!s.at) s.at=base;
+    (s.matches||[]).forEach(function(m){ if(!m.at) m.at=base });
+  });
+  if(!st.removed) st.removed={};
+  return st;
+}
+function mergeState(pub,loc){
+  var top = ((loc.cfgAt||0) > (pub.cfgAt||0)) ? loc : pub;
+  var out = {
+    v:top.v, rosterV:Math.max(pub.rosterV||0, loc.rosterV||0),
+    event:top.event, course:top.course, teams:top.teams,
+    si:top.si, par:top.par,
+    cfgAt:Math.max(pub.cfgAt||0, loc.cfgAt||0)
+  };
+
+  /* players: union by id, newest stamp wins, tombstones suppress revivals */
+  var pP=byId(pub.players), lP=byId(loc.players), tomb={}, id;
+  [pub.removed||{}, loc.removed||{}].forEach(function(t){
+    for(var k in t) if(Object.prototype.hasOwnProperty.call(t,k))
+      tomb[k]=Math.max(tomb[k]||0, t[k]);
+  });
+  out.removed=tomb;
+  var seen={}, list=[];
+  for(id in pP) seen[id]=1;
+  for(id in lP) seen[id]=1;
+  for(id in seen){
+    var win=newer(pP[id], lP[id]);
+    if(!win) continue;
+    if(tomb[id] && tomb[id] >= (win.at||0)) continue;  /* removed after its last edit */
+    list.push(win);
+  }
+  /* keep the newer side's ordering so the roster doesn't reshuffle on merge */
+  var order=(top.players||[]).map(function(p){return p.id});
+  list.sort(function(a,b){
+    var ia=order.indexOf(a.id), ib=order.indexOf(b.id);
+    return (ia<0?9999:ia)-(ib<0?9999:ib);
+  });
+  out.players=list;
+
+  /* sessions: shape from the newer side, matches merged per id */
+  var pS=byId(pub.sessions), lS=byId(loc.sessions);
+  out.sessions=(top.sessions||[]).map(function(bs){
+    var a=pS[bs.id], b=lS[bs.id], s=newer(a,b)||bs;
+    var aM=byId(a&&a.matches), bM=byId(b&&b.matches);
+    return {
+      id:bs.id, day:s.day, format:s.format, nine:s.nine, at:s.at||0,
+      matches:(bs.matches||[]).map(function(x){ return newer(aM[x.id], bM[x.id])||x })
+    };
+  });
+
+  out.results=mergeResults(pub.results||{}, loc.results||{});
+  return out;
+}
+
 function boot(){
-  var pub=readPublished(), loc=readLocal();
-  if(pub && loc){
-    S = ((loc.cfgAt||0) > (pub.cfgAt||0)) ? loc : pub;
-    S.results = mergeResults(pub.results||{}, loc.results||{});
-  } else S = pub || loc || freshState();
+  var pub=stampMissing(readPublished()), loc=stampMissing(readLocal());
+  if(pub && loc) S = mergeState(pub, loc);
+  else S = pub || loc || stampMissing(freshState());
   if(!S.si) S.si=SI.slice();
   if(!S.par) S.par=PAR.slice();
   if(!S.results) S.results={};
+  if(!S.removed) S.removed={};
   migrateRoster();
   normalizeDays();
   try{ me = localStorage.getItem(LS+":me") || "" }catch(e){}
@@ -886,13 +965,13 @@ function autoPair(s){
   var per=FORMATS[s.format].per;
   var pool={a:shuffle(S.players.filter(function(p){return p.team==="a"}).map(function(p){return p.id})),
             b:shuffle(S.players.filter(function(p){return p.team==="b"}).map(function(p){return p.id}))};
-  s.matches.forEach(function(m){ m.aIds=pool.a.splice(0,per); m.bIds=pool.b.splice(0,per) });
+  s.matches.forEach(function(m){ m.aIds=pool.a.splice(0,per); m.bIds=pool.b.splice(0,per); stamp(m) });
 }
 function parseRoster(text,team){
   return text.split("\n").map(function(l){return l.trim()}).filter(Boolean).map(function(l){
     var mm=l.match(/^(.*?)[\s,]+(\-?\d+(?:\.\d+)?)\s*$/);
-    return mm ? {id:uid(),name:mm[1].trim(),ch:Number(mm[2]),team:team}
-              : {id:uid(),name:l,ch:0,team:team};
+    return mm ? {id:uid(),name:mm[1].trim(),ch:Number(mm[2]),team:team,at:Date.now()}
+              : {id:uid(),name:l,ch:0,team:team,at:Date.now()};
   });
 }
 
@@ -939,15 +1018,19 @@ function wire(root){
     toast("Added "+add.length+" to "+S.teams[t].name+".");
   });
   on("[data-team]","input",function(){S.teams[this.getAttribute("data-team")].name=this.value;S.cfgAt=Date.now();saveLocal()});
-  on("[data-pn]","input",function(){var p=player(this.getAttribute("data-pn"));if(p){p.name=this.value;S.cfgAt=Date.now();saveLocal()}});
-  on("[data-pc]","input",function(){var p=player(this.getAttribute("data-pc"));if(p){p.ch=Number(this.value)||0;S.cfgAt=Date.now();saveLocal()}});
-  on("[data-swap]","click",function(){var p=player(this.getAttribute("data-swap"));if(p){p.team=p.team==="a"?"b":"a";touchCfg()}});
+  on("[data-pn]","input",function(){var p=player(this.getAttribute("data-pn"));if(p){p.name=this.value;stamp(p);S.cfgAt=Date.now();saveLocal()}});
+  on("[data-pc]","input",function(){var p=player(this.getAttribute("data-pc"));if(p){p.ch=Number(this.value)||0;stamp(p);S.cfgAt=Date.now();saveLocal()}});
+  on("[data-swap]","click",function(){var p=player(this.getAttribute("data-swap"));if(p){p.team=p.team==="a"?"b":"a";stamp(p);touchCfg()}});
   on("[data-del]","click",function(){
     var id=this.getAttribute("data-del");
     S.players=S.players.filter(function(p){return p.id!==id});
+    /* tombstone, or the player comes back from another phone's snapshot */
+    S.removed=S.removed||{}; S.removed[id]=Date.now();
     S.sessions.forEach(function(s){s.matches.forEach(function(m){
+      var had = m.aIds.indexOf(id)>=0 || m.bIds.indexOf(id)>=0;
       m.aIds=m.aIds.filter(function(x){return x!==id});
       m.bIds=m.bIds.filter(function(x){return x!==id});
+      if(had) stamp(m);
     })});
     touchCfg();
   });
@@ -958,7 +1041,7 @@ function wire(root){
   });
   on("[data-swapnine]","click",function(){
     dayPeers(this.getAttribute("data-swapnine")).forEach(function(s){
-      s.nine = s.nine==="back"?"front":"back";
+      s.nine = s.nine==="back"?"front":"back"; stamp(s);
     });
     touchCfg();
   });
@@ -976,11 +1059,14 @@ function wire(root){
     ids[k]= val||null;
     var clean=ids.filter(Boolean).filter(function(x,i,arr){return arr.indexOf(x)===i});
     if(side==="a") m.aIds=clean; else m.bIds=clean;
+    stamp(m);
     /* a player can only be in one match per session */
     if(val) s.matches.forEach(function(mm){
       if(mm.id===m.id) return;
+      var had = mm.aIds.indexOf(val)>=0 || mm.bIds.indexOf(val)>=0;
       mm.aIds=mm.aIds.filter(function(x){return x!==val});
       mm.bIds=mm.bIds.filter(function(x){return x!==val});
+      if(had) stamp(mm);
     });
     syncDay(s);
     touchCfg();
