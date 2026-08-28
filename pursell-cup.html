@@ -489,6 +489,19 @@ function holesOf(sess){
   for(var i=0;i<9;i++) out.push(start+i);
   return out;
 }
+/* The holes in the order this group actually plays them. On a shotgun a group
+   tees off somewhere other than the low hole of its nine, and match play counts
+   holes remaining from where they started — not from the low number on the card.
+   evalMatch walks this instead of holesOf, or a group going off 14 is treated as
+   though it were already five holes deep and closes out with a full loop still
+   to play. No start (or one that isn't on this nine) rotates by zero, which is
+   byte-for-byte the old behaviour. Stroke allocation never consults this:
+   ranksOf sorts by stroke index, so where you start cannot move a shot. */
+function playOrder(sess,match){
+  var hs=holesOf(sess);
+  var i = (match && match.start) ? hs.indexOf(+match.start) : -1;
+  return i>0 ? hs.slice(i).concat(hs.slice(0,i)) : hs;
+}
 /* Rank the nine's holes 1..9 by their 18-hole stroke index. */
 /* A session that has already been played keeps the card it was played under
    (sess.si), so correcting the stroke index never rewrites a finished result.
@@ -587,7 +600,7 @@ function holeWinner(match,sess,res,hole,alloc,ranks){
 
 function evalMatch(match,sess){
   var res=S.results[match.id], alloc=allocation(match,sess), ranks=ranksOf(sess);
-  var hs=holesOf(sess), a=0,b=0,played=0,closed=false,dAt=0,rAt=0,last=0,idx=0;
+  var hs=playOrder(sess,match), a=0,b=0,played=0,closed=false,dAt=0,rAt=0,last=0,idx=0;
   for(var i=0;i<hs.length;i++){
     var h=hs[i], w=holeWinner(match,sess,res,h,alloc,ranks);
     if(!w) continue;
@@ -930,13 +943,18 @@ function findMatch(id){
 function renderMatch(){
   var f=findMatch(openId); if(!f) {openId=null; return renderBoard()}
   var m=f.m, s=f.s, F=FORMATS[s.format], e=evalMatch(m,s);
-  var hs=holesOf(s), res=S.results[m.id]||{holes:{},scores:{}};
+  var hs=playOrder(s,m), res=S.results[m.id]||{holes:{},scores:{}};
   var mode=res.mode||"tap";
-  if(curHole==null||hs.indexOf(curHole)<0) curHole = e.last ? Math.min(hs[8],e.last+1) : hs[0];
+  if(curHole==null||hs.indexOf(curHole)<0){
+    /* land on the hole after the last one scored, in play order */
+    var li = e.last ? hs.indexOf(e.last) : -1;
+    curHole = li>=0 ? hs[Math.min(8,li+1)] : hs[0];
+  }
   var h=curHole;
 
   var html='<div class="sec-h"><button class="btn" id="back" style="min-height:42px">← Back</button>'+
-    '<span class="eyebrow">'+esc(sessName(s))+' · '+esc(F.label)+'</span></div>';
+    '<span class="eyebrow">'+esc(sessName(s))+' · '+esc(F.label)+
+      (hs[0]!==holesOf(s)[0] ? ' · off '+hs[0] : '')+'</span></div>';
 
   /* summary */
   html+='<div class="card"><div class="mrow-top" style="margin-bottom:9px">'+
@@ -1172,6 +1190,23 @@ function pairEditor(peers){
     return '<select data-slot="'+lead.id+'|'+m.id+'|'+side+'|'+k+'" '+
       'style="flex:1;min-width:0;font-size:13px;min-height:44px;color:var(--'+side+');font-weight:600">'+opts+'</select>';
   }
+  /* Shotgun support: which hole of this nine the group tees off on. Left at
+     "1st hole" the match behaves exactly as it always has, so this is inert
+     for a normal start and only needs setting on a day that goes off split
+     tees. Each nine is set separately — the same group starts on different
+     holes on the front and the back. */
+  function startPicker(p,pm){
+    var hs=holesOf(p), cur=+pm.start||hs[0];
+    var opts=hs.map(function(h,n){
+      return '<option value="'+h+'"'+(h===cur?" selected":"")+'>Hole '+h+
+        (n===0?" (normal start)":"")+'</option>';
+    }).join("");
+    return '<div class="row" style="margin-top:4px;flex-wrap:nowrap;align-items:center;gap:6px">'+
+      '<span class="mini" style="flex:0 0 auto">Starts on</span>'+
+      '<select data-start="'+p.id+'|'+pm.id+'" style="flex:1;min-width:0;font-size:12.5px;'+
+        'min-height:38px;padding:4px 8px'+(pm.start&&+pm.start!==hs[0]?';font-weight:700':"")+'">'+
+      opts+'</select></div>';
+  }
   return '<div style="padding:8px 0 4px">'+lead.matches.map(function(m,i){
     var rows=["a","b"].map(function(side){
       var ids=(side==="a"?m.aIds:m.bIds), cells="";
@@ -1181,8 +1216,9 @@ function pairEditor(peers){
     var hints=peers.map(function(p){
       var pm=p.matches[i];
       if(!pm) return "";
-      return '<div class="mini" style="margin-top:4px">'+esc(nineName(p))+' · '+
-        esc(FORMATS[p.format].label)+' — '+pairHint(pm,p)+'</div>';
+      return '<div class="mini" style="margin-top:6px">'+esc(nineName(p))+' · '+
+        esc(FORMATS[p.format].label)+' — '+pairHint(pm,p)+'</div>'+
+        startPicker(p,pm);
     }).join("");
     return '<div style="border:1px solid var(--line);border-radius:9px;padding:10px;margin-bottom:8px">'+
       '<div class="eyebrow" style="margin-bottom:7px">Match '+(i+1)+'</div>'+rows+hints+'</div>';
@@ -1224,9 +1260,9 @@ function wire(root){
   on("[data-hole]","click",function(){curHole=+this.getAttribute("data-hole");render()});
 
   var back=root.querySelector("#back"); if(back)back.onclick=function(){openId=null;view="board";render()};
-  var prev=root.querySelector("#prev"); if(prev)prev.onclick=function(){var f=findMatch(openId),hs=holesOf(f.s);
+  var prev=root.querySelector("#prev"); if(prev)prev.onclick=function(){var f=findMatch(openId),hs=playOrder(f.s,f.m);
     curHole=hs[Math.max(0,hs.indexOf(curHole)-1)];render()};
-  var next=root.querySelector("#next"); if(next)next.onclick=function(){var f=findMatch(openId),hs=holesOf(f.s);
+  var next=root.querySelector("#next"); if(next)next.onclick=function(){var f=findMatch(openId),hs=playOrder(f.s,f.m);
     curHole=hs[Math.min(8,hs.indexOf(curHole)+1)];render()};
 
   on("[data-tap]","click",function(){
@@ -1288,6 +1324,16 @@ function wire(root){
   on("[data-pairopen]","click",function(){
     var id=this.getAttribute("data-pairopen");
     pairOpen = pairOpen===id ? null : id; render();
+  });
+  on("[data-start]","change",function(){
+    var p=this.getAttribute("data-start").split("|");
+    var s=S.sessions.filter(function(x){return x.id===p[0]})[0]; if(!s) return;
+    var m=s.matches.filter(function(x){return x.id===p[1]})[0]; if(!m) return;
+    var hs=holesOf(s), v=parseInt(this.value,10);
+    /* store nothing for a normal start, so an untouched match stays exactly as
+       it was rather than carrying a redundant field around the sync */
+    if(hs.indexOf(v)>0) m.start=v; else delete m.start;
+    stamp(m); touchCfg();
   });
   on("[data-slot]","change",function(){
     var p=this.getAttribute("data-slot").split("|"), val=this.value;
