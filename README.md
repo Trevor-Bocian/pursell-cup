@@ -194,8 +194,8 @@ played. That is almost never what you want once play has started.
 `ranksOf()` therefore reads `siOf(session)`, not `S.si` directly. A session pinned to its
 own `si` keeps resolving under the card it was played on; everything else follows the
 live one. `SI_PLAYED` holds the superseded card and `SI_PLAYED_SESSIONS` names the
-sessions that stay on it — Thursday and Friday for the 17/18 correction, with only
-Saturday moving.
+sessions that stay on it — Thursday alone for the 17/18 correction, with Friday and
+Saturday moving to the corrected index.
 
 Two details worth keeping if you touch this:
 
@@ -230,7 +230,7 @@ node tests/engine.test.js      # 34 checks: allocation, stroke spreading, closeo
 node tests/daysync.test.js     # 11 checks: per-day pairing mirror
 node tests/merge.test.js       # 21 checks: per-entity config merge (artifact + firebase share this)
 node tests/firebase.test.js    # 15 checks: RTDB key-order + empty-array round trip
-node tests/course.test.js      # 31 checks: stroke-index migration, per-session pinning
+node tests/course.test.js      # 35 checks: stroke-index migration, per-session pinning
 node tools/rostercheck.js      # handicap spread analysis, not a test
 ```
 

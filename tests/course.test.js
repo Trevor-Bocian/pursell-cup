@@ -145,22 +145,26 @@ console.log("\n=== played sessions keep the card they were played under ===");
   const by = id => S.sessions.find(s => s.id === id);
 
   eq("Thu back is pinned", by("s2").si, OLD_SI);
-  eq("Fri back is pinned", by("s4").si, OLD_SI);
+  eq("Fri back is not pinned", by("s4").si, undefined);
   eq("Sat back is not pinned", by("s6").si, undefined);
+  eq("Fri back follows the corrected card", siOf(S, by("s4")), SI);
   eq("Sat back follows the corrected card", siOf(S, by("s6")), SI);
 
   const rank = sess => ranksOf(S, sess);
   eq("Thu back keeps 17 at #4 (as played)", rank(by("s2"))[17], 4);
   eq("Thu back keeps 18 at #8 (as played)", rank(by("s2"))[18], 8);
-  eq("Fri back keeps 17 at #4 (as played)", rank(by("s4"))[17], 4);
+  eq("Fri back moves 17 to #8", rank(by("s4"))[17], 8);
+  eq("Fri back moves 18 to #4", rank(by("s4"))[18], 4);
   eq("Sat back moves 17 to #8", rank(by("s6"))[17], 8);
   eq("Sat back moves 18 to #4", rank(by("s6"))[18], 4);
 
   const shot = (rb, n, hole) => Math.floor(n / 9) + (rb[hole] <= n % 9 ? 1 : 0);
-  const thu = rank(by("s2")), sat = rank(by("s6"));
+  const thu = rank(by("s2")), fri = rank(by("s4")), sat = rank(by("s6"));
   eq("a 5-stroke player on Thu back still gets 17, not 18",
      [shot(thu,5,17), shot(thu,5,18)], [1,0]);
-  eq("the same player on Sat back gets 18, not 17",
+  eq("the same player on Fri back gets 18, not 17",
+     [shot(fri,5,17), shot(fri,5,18)], [0,1]);
+  eq("and on Sat back gets 18, not 17",
      [shot(sat,5,17), shot(sat,5,18)], [0,1]);
 }
 
@@ -171,7 +175,9 @@ console.log("\n=== the pin survives a stale phone stripping it ===");
   // an old-build phone republishes s2 with no si on it
   const stripped = { id: "s2", day: DAY.s2, nine: NINE.s2, matches: [] };
   eq("still resolves as played", ranksOf(S, stripped)[17], 4);
-  eq("and an unplayed session is untouched by the fallback",
+  eq("an unpinned session is untouched by the fallback",
+     ranksOf(S, { id: "s4", day: DAY.s4, nine: NINE.s4, matches: [] })[17], 8);
+  eq("and so is Saturday",
      ranksOf(S, { id: "s6", day: DAY.s6, nine: NINE.s6, matches: [] })[17], 8);
 }
 

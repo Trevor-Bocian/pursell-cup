@@ -276,17 +276,17 @@ var ROSTER=[
 var ROSTER_V=2;
 /* Bump when SI or PAR changes. See migrateCourse(). */
 var COURSE_V=2;
-/* The stroke index Thursday and Friday were actually played under: holes 17 and
-   18 sat at SI 8 and 16, transposed against the men's row on the FarmLinks card.
-   Correcting the card mid-event would otherwise re-decide finished holes for
-   every player holding 4-7 strokes, so the sessions below stay pinned to it and
-   only Saturday moves to the corrected index.
+/* The stroke index Thursday was played under: holes 17 and 18 sat at SI 8 and 16,
+   transposed against the men's row on the FarmLinks card. Allocation is derived at
+   render, so correcting the card re-decides finished holes for anyone holding 4-7
+   strokes. Thursday is done and stays on the card it was played on; Friday and
+   Saturday take the correction.
 
    Listed by id rather than inferred from "this session has scores": migrateCourse
    can run at boot before the first Firebase snapshot lands, and a phone reading an
    empty board would pin nothing. Constants make every phone agree. */
 var SI_PLAYED = [15,9,13,1,7,17,11,5,3, 14,6,2,18,4,10,12,8,16];
-var SI_PLAYED_SESSIONS = ["s1","s2","s3","s4"];   /* Thursday + Friday */
+var SI_PLAYED_SESSIONS = ["s1","s2"];   /* Thursday */
 function freshState(){
   return {
     v:2, rosterV:ROSTER_V, courseV:COURSE_V, event:"Barn Burner", course:"FarmLinks at Pursell Farms",
@@ -328,7 +328,7 @@ function migrateCourse(){
   S.si=SI.slice(); S.par=PAR.slice();
   S.courseV=COURSE_V; S.cfgAt=Date.now(); saveLocal();
   if(was && was!==SI.join(",")) setTimeout(function(){
-    toast("Stroke index corrected for Saturday. Thursday and Friday are unchanged.")},600);
+    toast("Stroke index corrected for Friday and Saturday. Thursday is unchanged.")},600);
 }
 
 /* ================= state + persistence ================= */
