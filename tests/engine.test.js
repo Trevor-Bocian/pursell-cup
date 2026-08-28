@@ -1,6 +1,16 @@
 // Verification harness for the Pursell Cup allocation + match-play engine.
-const SI  = [15,9,13,1,7,17,11,5,3, 14,6,2,18,4,10,12,8,16];
-const PAR = [5,4,4,4,3,5,4,3,4, 5,4,4,4,4,3,4,3,5];
+// SI and PAR are read out of the app rather than copied here: a hand-kept copy
+// once let an invalid stroke index ship green (hole 17/18 transposed, then a
+// duplicated value), because the suite was asserting against its own numbers.
+const APP = require("fs").readFileSync(
+  require("path").join(__dirname, "..", "pursell-cup.html"), "utf8");
+function courseArray(name){
+  const m = APP.match(new RegExp("var\\s+" + name + "\\s*=\\s*\\[([^\\]]+)\\]"));
+  if(!m) throw new Error("could not find " + name + " in pursell-cup.html");
+  return m[1].split(",").map(s => Number(s.trim()));
+}
+const SI  = courseArray("SI");
+const PAR = courseArray("PAR");
 const FORMATS = {
   scramble:{per:2,alloc:"lowhigh",lo:.35,hi:.15},
   fourball:{per:2,alloc:"player",pct:1.00},
@@ -58,6 +68,10 @@ eq("front: hole 4 (SI 1) ranks #1", rf[4], 1);
 eq("front: hole 6 (SI 17) ranks #9", rf[6], 9);
 eq("back: hole 12 (SI 2) ranks #1", rb[12], 1);
 eq("back: hole 13 (SI 18) ranks #9", rb[13], 9);
+// 17 and 18 shipped transposed once, which handed a stroke to 17 for every
+// player whose count mod 9 fell in 4..7. Card reads 17 -> SI 16, 18 -> SI 8.
+eq("back: hole 17 (SI 16) ranks #8", rb[17], 8);
+eq("back: hole 18 (SI 8) ranks #4", rb[18], 4);
 eq("front ranks are a 1-9 permutation", Object.values(rf).sort((a,b)=>a-b), [1,2,3,4,5,6,7,8,9]);
 eq("back ranks are a 1-9 permutation", Object.values(rb).sort((a,b)=>a-b), [1,2,3,4,5,6,7,8,9]);
 
@@ -82,10 +96,14 @@ eq("low man plays scratch", al.strokes.a1, 0);
 eq("18 hcp gets 5", al.strokes.a2, 5);
 eq("10 hcp gets 1", al.strokes.b1, 1);
 eq("12 hcp gets 2", al.strokes.b2, 2);
+// Derived from the ranking, not a frozen hole list: the old hardcoded lists
+// put 17 in the hard group and 18 in the easy group, so they agreed with a
+// transposed stroke index instead of catching it.
+const backByRank = Array.from({length:9},(_,i)=>10+i).sort((x,y)=>rb[x]-rb[y]);
 eq("a2's 5 strokes cover the 5 hardest of the back",
-   [12,14,11,17,15].map(h=>strokesOnHole(5,h,rb)), [1,1,1,1,1]);
+   backByRank.slice(0,5).map(h=>strokesOnHole(5,h,rb)), [1,1,1,1,1]);
 eq("a2 gets nothing on the 4 easiest",
-   [16,10,18,13].map(h=>strokesOnHole(5,h,rb)), [0,0,0,0]);
+   backByRank.slice(5).map(h=>strokesOnHole(5,h,rb)), [0,0,0,0]);
 
 console.log("\n=== Fri AM: shamble, 75%, front 9 ===");
 // halves 4,9,5,6 -> *0.75 = 3, 6.75, 3.75, 4.5 -> minus low 3 -> 0, 3.75, 0.75, 1.5
