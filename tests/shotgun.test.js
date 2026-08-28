@@ -7,7 +7,14 @@ const fs = require("fs");
 const path = require("path");
 const src = fs.readFileSync(path.join(__dirname, "..", "pursell-cup.html"), "utf8");
 
+// Comments are blanked before brace-matching: an apostrophe inside one
+// ("don't invent a fresh edit time") otherwise reads as an opening quote and
+// swallows the rest of the file.
+const clean = src.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, " "))
+                 .replace(/^([^\n"'`]*?)\/\/[^\n]*/gm,
+                          (m, pre) => pre + " ".repeat(m.length - pre.length));
 function extract(name) {
+  const src = clean;
   const start = src.indexOf("function " + name + "(");
   if (start < 0) throw new Error("not found in source: " + name);
   let i = src.indexOf("{", start), depth = 0, inS = null, esc = false;
@@ -133,6 +140,59 @@ console.log("\n=== strokes never move ===");
        [10,11,12,13,14,15,16,17,18].map(per),
        [10,11,12,13,14,15,16,17,18].map(h => E2.sideStrokes(base, base.side, h, ranks)));
   });
+}
+
+// The start hole is only useful if it reaches the other phones: it rides the
+// ordinary config push, so it has to survive RTDB's key scrambling, the
+// per-entity merge, and the pairing mirror.
+console.log("\n=== the start hole reaches other phones ===");
+{
+  const SYNC = ["toMap","fromMap","coerceIds","sessionsToMap","firebaseSnapshotToState",
+    "stamp","byId","newer","stampMissing","mergeResults","mergeState","syncDay",
+    "dayPeers","normalizeDays"];
+  const mk = () => [
+    { id:"s3", day:"Friday", format:"shamble", nine:"front", at:100,
+      matches:[{ id:"f1", aIds:["a"], bIds:["b"], start:5, at:100 },
+               { id:"f2", aIds:["c"], bIds:["d"], at:100 }] },
+    { id:"s4", day:"Friday", format:"greensomes", nine:"back", at:100,
+      matches:[{ id:"k1", aIds:["a"], bIds:["b"], start:14, at:100 },
+               { id:"k2", aIds:["c"], bIds:["d"], at:100 }] }
+  ];
+  const build = st => new Function("S",
+    SYNC.map(extract).join("\n") + "\nreturn {" + SYNC.join(",") + "};")({ sessions: st });
+  const sessions = mk(), F = build(sessions);
+
+  // RTDB hands keys back in arbitrary order; reverse them to prove ord wins
+  const mapped = F.sessionsToMap(sessions), scrambled = {};
+  Object.keys(mapped).reverse().forEach(k => {
+    const s = Object.assign({}, mapped[k]), mm = {};
+    Object.keys(s.matches).reverse().forEach(j => mm[j] = s.matches[j]);
+    s.matches = mm; scrambled[k] = s;
+  });
+  const round = F.firebaseSnapshotToState({ meta:{ v:2, si:[], par:[], cfgAt:100 },
+    players:{}, sessions:scrambled, results:{}, removed:{} });
+  const g = id => round.sessions.find(s => s.id === id);
+  eq("front start survives the round trip", g("s3").matches[0].start, 5);
+  eq("back start survives the round trip",  g("s4").matches[0].start, 14);
+  eq("a normal-start match stays clean",    g("s3").matches[1].start, undefined);
+
+  const S2 = st => ({ cfgAt:st, players:[], results:{}, removed:{},
+    sessions:[{ id:"s4", day:"Friday", format:"greensomes", nine:"back", at:st,
+      matches:[Object.assign({ id:"k1", aIds:["a"], bIds:["b"], at:st },
+                             st === 200 ? { start:14 } : {})] }] });
+  eq("a match carrying a start merges in",
+     F.mergeState(S2(100), S2(200)).sessions[0].matches[0].start, 14);
+  eq("and the same the other way round",
+     F.mergeState(S2(200), S2(100)).sessions[0].matches[0].start, 14);
+  eq("a staler copy cannot strip it",
+     F.mergeState(S2(50), S2(200)).sessions[0].matches[0].start, 14);
+
+  // pairings mirror across the day; start holes must not, the nines differ
+  const st2 = mk(), F2 = build(st2);
+  F2.syncDay(st2[0]);
+  F2.normalizeDays();
+  eq("the pairing mirror leaves each nine its own start",
+     [st2[0].matches[0].start, st2[1].matches[0].start], [5, 14]);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
