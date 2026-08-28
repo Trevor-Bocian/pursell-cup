@@ -185,6 +185,28 @@ fixing the constant alone changed nothing on the course, because every phone and
 Firebase record still held the old array. `tests/course.test.js` covers the migration
 and both merge directions.
 
+### Correcting the card mid-event
+
+Allocation is derived at render, never frozen into a result — so correcting the stroke
+index re-decides finished holes for anyone holding 4–7 strokes, days after they were
+played. That is almost never what you want once play has started.
+
+`ranksOf()` therefore reads `siOf(session)`, not `S.si` directly. A session pinned to its
+own `si` keeps resolving under the card it was played on; everything else follows the
+live one. `SI_PLAYED` holds the superseded card and `SI_PLAYED_SESSIONS` names the
+sessions that stay on it — Thursday and Friday for the 17/18 correction, with only
+Saturday moving.
+
+Two details worth keeping if you touch this:
+
+- **Pinned sessions are named by id, not inferred from "has scores".** `migrateCourse()`
+  can run at boot before the first Firebase snapshot lands; a phone reading an empty
+  board would infer that nothing had been played and pin nothing.
+- **`siOf()` falls back to the constant, not just the stored pin.** Sessions merge
+  per-entity by stamp, so a phone on an older build can republish `s2` with no pin and
+  strip one that was set. The constant makes a played session resolve identically on any
+  phone running the current build, synced or not.
+
 ## Deploying with Firebase
 
 1. Create a Realtime Database project, then fill in `FIREBASE` near the top of the
@@ -208,7 +230,7 @@ node tests/engine.test.js      # 34 checks: allocation, stroke spreading, closeo
 node tests/daysync.test.js     # 11 checks: per-day pairing mirror
 node tests/merge.test.js       # 21 checks: per-entity config merge (artifact + firebase share this)
 node tests/firebase.test.js    # 15 checks: RTDB key-order + empty-array round trip
-node tests/course.test.js      # 18 checks: stroke-index migration + course merge
+node tests/course.test.js      # 31 checks: stroke-index migration, per-session pinning
 node tools/rostercheck.js      # handicap spread analysis, not a test
 ```
 
@@ -223,7 +245,7 @@ tests/engine.test.js        golf math
 tests/daysync.test.js       pairing mirror
 tests/merge.test.js         per-entity config merge
 tests/firebase.test.js      RTDB ordering + empty-array round trip
-tests/course.test.js        stroke-index migration, course-data merge
+tests/course.test.js        stroke-index migration, per-session pinning
 tools/rostercheck.js        handicap analysis
 vercel.json                 rewrite / to pursell-cup.html, no-store
 .vercelignore                keeps tests/tools/archive out of the deploy

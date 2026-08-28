@@ -276,6 +276,17 @@ var ROSTER=[
 var ROSTER_V=2;
 /* Bump when SI or PAR changes. See migrateCourse(). */
 var COURSE_V=2;
+/* The stroke index Thursday and Friday were actually played under: holes 17 and
+   18 sat at SI 8 and 16, transposed against the men's row on the FarmLinks card.
+   Correcting the card mid-event would otherwise re-decide finished holes for
+   every player holding 4-7 strokes, so the sessions below stay pinned to it and
+   only Saturday moves to the corrected index.
+
+   Listed by id rather than inferred from "this session has scores": migrateCourse
+   can run at boot before the first Firebase snapshot lands, and a phone reading an
+   empty board would pin nothing. Constants make every phone agree. */
+var SI_PLAYED = [15,9,13,1,7,17,11,5,3, 14,6,2,18,4,10,12,8,16];
+var SI_PLAYED_SESSIONS = ["s1","s2","s3","s4"];   /* Thursday + Friday */
 function freshState(){
   return {
     v:2, rosterV:ROSTER_V, courseV:COURSE_V, event:"Barn Burner", course:"FarmLinks at Pursell Farms",
@@ -309,9 +320,15 @@ function migrateRoster(){
 function migrateCourse(){
   if((S.courseV||1) >= COURSE_V) return;
   var was=(S.si||[]).join(",");
+  /* Pin the already-played sessions before moving the live card, so their
+     finished holes keep resolving exactly as they did when they were scored. */
+  (S.sessions||[]).forEach(function(s){
+    if(!s.si && SI_PLAYED_SESSIONS.indexOf(s.id)>=0) s.si=SI_PLAYED.slice();
+  });
   S.si=SI.slice(); S.par=PAR.slice();
   S.courseV=COURSE_V; S.cfgAt=Date.now(); saveLocal();
-  if(was && was!==SI.join(",")) setTimeout(function(){toast("Stroke index corrected from the scorecard")},600);
+  if(was && was!==SI.join(",")) setTimeout(function(){
+    toast("Stroke index corrected for Saturday. Thursday and Friday are unchanged.")},600);
 }
 
 /* ================= state + persistence ================= */
@@ -473,9 +490,23 @@ function holesOf(sess){
   return out;
 }
 /* Rank the nine's holes 1..9 by their 18-hole stroke index. */
+/* A session that has already been played keeps the card it was played under
+   (sess.si), so correcting the stroke index never rewrites a finished result.
+   Everything else follows the live card. See SI_PLAYED / migrateCourse(). */
+function siOf(sess){
+  if(!sess) return S.si;
+  if(sess.si) return sess.si;
+  /* Not just the stored pin: sessions merge per-entity by stamp, so a phone
+     still on the old build can push a copy of s2/s4 with no pin on it and
+     strip one that was already set. The constant makes a played session
+     resolve the same way on any phone running this build, synced or not. */
+  if(SI_PLAYED_SESSIONS.indexOf(sess.id)>=0) return SI_PLAYED;
+  return S.si;
+}
 function ranksOf(sess){
+  var si=siOf(sess);
   var hs=holesOf(sess).slice();
-  hs.sort(function(x,y){return S.si[x-1]-S.si[y-1]});
+  hs.sort(function(x,y){return si[x-1]-si[y-1]});
   var r={};
   hs.forEach(function(h,i){r[h]=i+1});
   return r;
@@ -935,7 +966,7 @@ function renderMatch(){
   /* entry */
   html+='<div class="card"><div class="sec-h" style="margin-bottom:12px">'+
     '<h2 style="font-size:19px">Hole '+h+'</h2>'+
-    '<span class="eyebrow">Par '+S.par[h-1]+' · SI '+S.si[h-1]+' · #'+e.ranks[h]+' on this nine</span></div>';
+    '<span class="eyebrow">Par '+S.par[h-1]+' · SI '+siOf(s)[h-1]+' · #'+e.ranks[h]+' on this nine</span></div>';
 
   if(mode==="tap"){
     var w=holeWinner(m,s,res,h,e.alloc,e.ranks);
