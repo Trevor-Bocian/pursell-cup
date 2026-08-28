@@ -274,9 +274,11 @@ var ROSTER=[
 /* Bump when a handicap in ROSTER changes, so phones that already cached the
    old numbers get patched without losing pairings or scores. */
 var ROSTER_V=2;
+/* Bump when SI or PAR changes. See migrateCourse(). */
+var COURSE_V=2;
 function freshState(){
   return {
-    v:2, rosterV:ROSTER_V, event:"Barn Burner", course:"FarmLinks at Pursell Farms",
+    v:2, rosterV:ROSTER_V, courseV:COURSE_V, event:"Barn Burner", course:"FarmLinks at Pursell Farms",
     teams:{a:{name:"Trevor"},b:{name:"Andrew"}},
     players:ROSTER.map(function(r){
       return {id:uid(),name:r[0],idx:r[1],ch:r[2],team:r[3],tee:r[4],at:Date.now()};
@@ -299,6 +301,17 @@ function migrateRoster(){
   });
   S.rosterV=ROSTER_V; S.cfgAt=Date.now(); saveLocal();
   if(changed.length) setTimeout(function(){toast("Handicaps updated: "+changed.join(", "))},600);
+}
+/* The stroke index that drives allocation is S.si, not the SI constant above —
+   it is stored per phone and mirrored into Firebase, so editing the constant
+   alone reaches nobody who has already loaded the board. Bump COURSE_V whenever
+   SI or PAR changes and every cached copy gets overwritten from the card. */
+function migrateCourse(){
+  if((S.courseV||1) >= COURSE_V) return;
+  var was=(S.si||[]).join(",");
+  S.si=SI.slice(); S.par=PAR.slice();
+  S.courseV=COURSE_V; S.cfgAt=Date.now(); saveLocal();
+  if(was && was!==SI.join(",")) setTimeout(function(){toast("Stroke index corrected from the scorecard")},600);
 }
 
 /* ================= state + persistence ================= */
@@ -370,10 +383,18 @@ function stampMissing(st){
 }
 function mergeState(pub,loc){
   var top = ((loc.cfgAt||0) > (pub.cfgAt||0)) ? loc : pub;
+  /* si/par follow the newest COURSE_V rather than the newest cfgAt: a phone
+     still on the old card can hold a newer cfgAt (someone renamed a team on
+     it) and would otherwise push a corrected stroke index back out. Same
+     version on both sides falls back to cfgAt, so manual SI edits still
+     merge by recency. */
+  var pcv=pub.courseV||0, lcv=loc.courseV||0;
+  var card = pcv===lcv ? top : (pcv>lcv ? pub : loc);
   var out = {
     v:top.v, rosterV:Math.max(pub.rosterV||0, loc.rosterV||0),
+    courseV:Math.max(pcv,lcv),
     event:top.event, course:top.course, teams:top.teams,
-    si:top.si, par:top.par,
+    si:card.si, par:card.par,
     cfgAt:Math.max(pub.cfgAt||0, loc.cfgAt||0)
   };
 
@@ -432,6 +453,7 @@ function boot(){
   if(!S.results) S.results={};
   if(!S.removed) S.removed={};
   migrateRoster();
+  migrateCourse();
   normalizeDays();
   try{ me = localStorage.getItem(LS+":me") || "" }catch(e){}
   saveLocal();
@@ -635,7 +657,8 @@ function firebaseSnapshotToState(val){
     return copy;
   });
   return {
-    v:meta.v, rosterV:meta.rosterV, event:meta.event, course:meta.course, teams:meta.teams,
+    v:meta.v, rosterV:meta.rosterV, courseV:meta.courseV,
+    event:meta.event, course:meta.course, teams:meta.teams,
     si:meta.si, par:meta.par, cfgAt:meta.cfgAt,
     players:fromMap(val.players), sessions:sessions,
     results:val.results||{}, removed:val.removed||{}
@@ -667,6 +690,7 @@ function subscribeFirebase(){
     if(!S.results) S.results={};
     if(!S.removed) S.removed={};
     migrateRoster();
+    migrateCourse();
     normalizeDays();
     saveLocal(); render();
   }, function(){ /* permission denied / offline — local writes keep working */ });
@@ -682,7 +706,8 @@ function pushFirebaseConfig(){
   var db=ensureFirebase(); if(!db) return;
   var updates={};
   updates[ROOT+"/meta"]={
-    v:S.v, rosterV:S.rosterV, event:S.event, course:S.course, teams:S.teams,
+    v:S.v, rosterV:S.rosterV, courseV:S.courseV||COURSE_V,
+    event:S.event, course:S.course, teams:S.teams,
     si:S.si, par:S.par, cfgAt:S.cfgAt
   };
   updates[ROOT+"/players"]=toMap(S.players);

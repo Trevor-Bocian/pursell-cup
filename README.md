@@ -96,13 +96,20 @@ hole 6 (SI 17) is #9. On the back, hole 12 (SI 2) is #1 and hole 13 (SI 18) is #
 player with 5 shots on the back gets them on the five hardest *back-nine* holes. Taking
 `SI <= 5` off the 18-hole card would give him one. See `ranksOf()`.
 
-Course data (FarmLinks, Longhorn tees), par 72:
+Course data (FarmLinks), par 72:
 
 ```
 Hole   1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18
 Par    5  4  4  4  3  5  4  3  4  5  4  4  4  4  3  4  3  5
-SI    15  9 13  1  7 17 11  5  3 14  6  2 18  4 10 12  8 16
+SI    15  9 13  1  7 17 11  5  3 14  6  2 18  4 10 12 16  8
 ```
+
+Read the SI off the **men's** HANDICAP row — the one directly under the Longhorn /
+Copperhead / Whitetail / Bobcat yardages. All four men's tees share it, so the roster's
+mix of Whitetail and Bobcat players doesn't change it. The card carries a *second*
+HANDICAP row lower down, under the QUAIL yardages; those are the forward-tee indexes
+and they differ (17 and 18 read 14 and 6 there, against 16 and 8 on the men's row).
+Copying that row in by mistake is a live bug, not a rounding detail.
 
 ## Sync model
 
@@ -158,6 +165,26 @@ phone.
 `migrateRoster()` patches cached handicaps by name when `ROSTER_V` is bumped, without
 disturbing pairings or scores. Bump it whenever a handicap in `ROSTER` changes.
 
+### Course data is state, not a constant
+
+Allocation reads `S.si` and `S.par`, **not** the `SI`/`PAR` constants. Those constants
+seed `freshState()` and nothing else — the arrays then live in each phone's
+`localStorage` and in `ROOT/meta`, and Setup lets a scorer edit the stroke index by
+hand. So correcting `SI` in the source reaches nobody who has already loaded the board.
+
+Bump `COURSE_V` whenever `SI` or `PAR` changes. `migrateCourse()` overwrites the stored
+arrays from the constants, stamps `cfgAt` so the correction propagates through the
+normal config push, and leaves phones already on that version alone so manual SI edits
+survive. `mergeState()` picks `si`/`par` from whichever side has the **higher
+`courseV`**, falling back to `cfgAt` only when both agree — otherwise a phone still on
+the old card but holding a newer `cfgAt` (someone renamed a team on it) would push the
+stale stroke index straight back out.
+
+This bit us live: holes 17 and 18 shipped transposed against the FarmLinks card, and
+fixing the constant alone changed nothing on the course, because every phone and the
+Firebase record still held the old array. `tests/course.test.js` covers the migration
+and both merge directions.
+
 ## Deploying with Firebase
 
 1. Create a Realtime Database project, then fill in `FIREBASE` near the top of the
@@ -177,10 +204,11 @@ artifact share pin, no "Post" step, no owner needed to relay changes.
 No framework. Plain Node, no install.
 
 ```
-node tests/engine.test.js      # 32 checks: allocation, stroke spreading, closeouts
+node tests/engine.test.js      # 34 checks: allocation, stroke spreading, closeouts
 node tests/daysync.test.js     # 11 checks: per-day pairing mirror
 node tests/merge.test.js       # 21 checks: per-entity config merge (artifact + firebase share this)
 node tests/firebase.test.js    # 15 checks: RTDB key-order + empty-array round trip
+node tests/course.test.js      # 18 checks: stroke-index migration + course merge
 node tools/rostercheck.js      # handicap spread analysis, not a test
 ```
 
@@ -195,6 +223,7 @@ tests/engine.test.js        golf math
 tests/daysync.test.js       pairing mirror
 tests/merge.test.js         per-entity config merge
 tests/firebase.test.js      RTDB ordering + empty-array round trip
+tests/course.test.js        stroke-index migration, course-data merge
 tools/rostercheck.js        handicap analysis
 vercel.json                 rewrite / to pursell-cup.html, no-store
 .vercelignore                keeps tests/tools/archive out of the deploy
