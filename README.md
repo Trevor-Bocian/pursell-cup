@@ -88,8 +88,8 @@ distinct per session so the two nines keep separate scorecards.
   `courseHandicap × allowance`, then all four are reduced by the lowest so the low man
   plays scratch. Net best ball per side decides the hole.
 
-**Course handicaps are halved first** — these are nine-hole matches. Except on
-Saturday: see **Splitting the allocation across the two nines** below.
+**Course handicaps are halved first** — these are nine-hole matches. Singles keep
+the half rather than rounding it away: see **Half strokes in singles** below.
 
 **Stroke index is ranked within the nine being played, not taken raw from the 18-hole
 card.** This is the easy thing to get wrong. On the front, hole 4 (SI 1) is stroke #1 and
@@ -112,27 +112,29 @@ HANDICAP row lower down, under the QUAIL yardages; those are the forward-tee ind
 and they differ (17 and 18 read 14 and 6 there, against 16 and 8 on the men's row).
 Copying that row in by mistake is a live bug, not a rounding detail.
 
-### Splitting the allocation across the two nines
+### Half strokes in singles
 
-Halving each nine and rounding it on its own sends a half-stroke **up on both nines**,
-so every odd course-handicap difference gained a stroke across the day: a 12 gave a 13
-two shots where eighteen holes of golf gives one. That distorted half of every possible
-pairing, always in the higher handicap's favour.
+Rounding the halved difference to a whole number sent a half-stroke **up on both
+nines**, so every odd course-handicap difference gained a stroke across the day: a 12
+gave a 13 two shots where eighteen holes of golf gives one. That distorted half of every
+possible pairing, always in the higher handicap's favour.
 
-Sessions listed in `SPLIT18_SESSIONS` (Saturday's two singles nines) instead allocate
-over all eighteen holes and split the result: `allocation()` uses the **full** course
-handicap rather than the halved one, and `nineShare()` gives the front `ceil(D/2)`
-strokes and the back `floor(D/2)`. Because the front holds the odd stroke indexes and
-the back the even ones, that reproduces a true eighteen-hole allocation exactly — the
-strokes land on SI 1, 2, 3 … in order and the day's total equals the handicap
-difference.
+Course handicaps are whole numbers, so half of one is always a multiple of 0.5 — the
+difference needs no rounding at all. `allocation()` keeps it for any format whose
+allowance is `diff` (singles), and rounds to a whole stroke everywhere else, because the
+weighted team formats land on arbitrary fractions rather than clean halves.
 
-The front carries the extra on an odd difference, which means **a one-shot match plays
-scratch on the back nine**. That is correct golf and it surprises people, so say it out
-loud before anyone tees off.
+A 12 against a 13 is now **half a stroke on each nine**: one across the day, and neither
+nine plays scratch. `strokesOnHole()` spreads the whole strokes hardest-hole-first as
+always and drops any trailing half on the hardest hole not already picking up an extra
+whole one, so 1½ is a full stroke on the toughest hole and a half on the next.
 
-Thursday and Friday are deliberately not in the list: they keep the per-nine halving
-they were played under. `tests/split18.test.js` covers both rules side by side.
+A half stroke **only breaks a tie**. Level gross on that hole wins it for the man
+receiving; it will not overturn a hole he loses outright. `strokeText()` renders these
+as "½" and "1½" rather than decimals, which is easier to read on a phone in sunlight.
+
+Only Saturday is singles, so no completed Thursday or Friday result moves.
+`tests/halfstroke.test.js` covers both rules side by side.
 
 ## Sync model
 
@@ -255,7 +257,7 @@ node tests/merge.test.js       # 21 checks: per-entity config merge (artifact + 
 node tests/firebase.test.js    # 15 checks: RTDB key-order + empty-array round trip
 node tests/course.test.js      # 35 checks: stroke-index migration, per-session pinning
 node tests/shotgun.test.js     # 41 checks: shotgun starts, play order, start-hole sync
-node tests/split18.test.js     # 45 checks: 18-hole allocation split across the nines
+node tests/halfstroke.test.js  # 66 checks: half strokes in singles, tie-breaking, display
 node tools/rostercheck.js      # handicap spread analysis, not a test
 ```
 
@@ -272,7 +274,7 @@ tests/merge.test.js         per-entity config merge
 tests/firebase.test.js      RTDB ordering + empty-array round trip
 tests/course.test.js        stroke-index migration, per-session pinning
 tests/shotgun.test.js       shotgun starts and play order
-tests/split18.test.js       18-hole allocation split across the two nines
+tests/halfstroke.test.js    half strokes in singles
 tools/rostercheck.js        handicap analysis
 vercel.json                 rewrite / to pursell-cup.html, no-store
 .vercelignore                keeps tests/tools/archive out of the deploy
