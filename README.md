@@ -73,9 +73,17 @@ Six nine-hole sessions, 40 points, 20½ to win. All 20 players in every session.
 Best ball at 100% and shamble at 75% are the organizer's house rules, chosen over the
 USGA's 90% four-ball allowance. Deliberate — don't "fix" them.
 
-**Pairings are per day, not per session.** A group plays both nines together. Editing a
-pairing on one nine mirrors it by match index onto the other (`syncDay`). Match IDs stay
-distinct per session so the two nines keep separate scorecards.
+**Pairings are per day on Thursday and Friday** — a group plays both nines together, so
+editing a pairing on one nine mirrors it by match index onto the other (`syncDay`). Match
+IDs stay distinct per session so the two nines keep separate scorecards.
+
+**Saturday is different: the singles switch opponents at the turn.** Days named in
+`INDEPENDENT_DAYS` do not mirror — each nine holds its own draw, `syncDay()` and
+`normalizeDays()` skip them, Setup shows a separate pairing editor per nine, and Shuffle
+draws each nine on its own so nobody meets the same opponent twice. Mirroring a day like
+this would silently overwrite the back nine with the front, and because the two draws are
+different, a player's stroke allocation is not the same on both nines either.
+`tests/pairings.test.js` covers both behaviours.
 
 ## The golf math
 
@@ -124,10 +132,12 @@ difference needs no rounding at all. `allocation()` keeps it for any format whos
 allowance is `diff` (singles), and rounds to a whole stroke everywhere else, because the
 weighted team formats land on arbitrary fractions rather than clean halves.
 
-A 12 against a 13 is now **half a stroke on each nine**: one across the day, and neither
-nine plays scratch. `strokesOnHole()` spreads the whole strokes hardest-hole-first as
-always and drops any trailing half on the hardest hole not already picking up an extra
-whole one, so 1½ is a full stroke on the toughest hole and a half on the next.
+A 12 against a 13 is now **half a stroke**, not a whole one. Each Saturday nine is a
+separate match against a different opponent, so the allocation is computed fresh per nine
+rather than being a share of some eighteen-hole total. `strokesOnHole()` spreads the whole
+strokes hardest-hole-first as always and drops any trailing half on the hardest hole not
+already picking up an extra whole one, so 1½ is a full stroke on the toughest hole and a
+half on the next.
 
 A half stroke **only breaks a tie**. Level gross on that hole wins it for the man
 receiving; it will not overturn a hole he loses outright. `strokeText()` renders these
@@ -258,6 +268,7 @@ node tests/firebase.test.js    # 15 checks: RTDB key-order + empty-array round t
 node tests/course.test.js      # 35 checks: stroke-index migration, per-session pinning
 node tests/shotgun.test.js     # 41 checks: shotgun starts, play order, start-hole sync
 node tests/halfstroke.test.js  # 66 checks: half strokes in singles, tie-breaking, display
+node tests/pairings.test.js    # 18 checks: which days mirror their pairings, which do not
 node tools/rostercheck.js      # handicap spread analysis, not a test
 ```
 
@@ -275,6 +286,7 @@ tests/firebase.test.js      RTDB ordering + empty-array round trip
 tests/course.test.js        stroke-index migration, per-session pinning
 tests/shotgun.test.js       shotgun starts and play order
 tests/halfstroke.test.js    half strokes in singles
+tests/pairings.test.js      per-day mirroring vs independent nines
 tools/rostercheck.js        handicap analysis
 vercel.json                 rewrite / to pursell-cup.html, no-store
 .vercelignore                keeps tests/tools/archive out of the deploy

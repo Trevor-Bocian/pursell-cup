@@ -149,8 +149,8 @@ console.log("\n=== strokes never move ===");
 console.log("\n=== the start hole reaches other phones ===");
 {
   const SYNC = ["toMap","fromMap","coerceIds","sessionsToMap","firebaseSnapshotToState",
-    "stamp","byId","newer","stampMissing","mergeResults","mergeState","syncDay",
-    "dayPeers","normalizeDays"];
+    "stamp","byId","newer","stampMissing","mergeResults","mergeState",
+    "mirrorsPairings","syncDay","dayPeers","normalizeDays"];
   const mk = () => [
     { id:"s3", day:"Friday", format:"shamble", nine:"front", at:100,
       matches:[{ id:"f1", aIds:["a"], bIds:["b"], start:5, at:100 },
@@ -159,8 +159,9 @@ console.log("\n=== the start hole reaches other phones ===");
       matches:[{ id:"k1", aIds:["a"], bIds:["b"], start:14, at:100 },
                { id:"k2", aIds:["c"], bIds:["d"], at:100 }] }
   ];
-  const build = st => new Function("S",
-    SYNC.map(extract).join("\n") + "\nreturn {" + SYNC.join(",") + "};")({ sessions: st });
+  const build = st => new Function("S","INDEPENDENT_DAYS",
+    SYNC.map(extract).join("\n") + "\nreturn {" + SYNC.join(",") + "};"
+  )({ sessions: st }, strs("INDEPENDENT_DAYS"));
   const sessions = mk(), F = build(sessions);
 
   // RTDB hands keys back in arbitrary order; reverse them to prove ord wins

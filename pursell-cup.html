@@ -220,7 +220,14 @@ function dayList(){
   return out;
 }
 function dayPeers(d){ return S.sessions.filter(function(x){return x.day===d}) }
+/* Most days a group stays together for both nines, so a pairing set on one
+   mirrors onto the other. Saturday's singles switch opponents at the turn:
+   each nine is its own draw, and mirroring would silently overwrite the back
+   with the front. Days listed here keep their two nines independent. */
+var INDEPENDENT_DAYS = ["Saturday"];
+function mirrorsPairings(day){ return INDEPENDENT_DAYS.indexOf(day)<0 }
 function syncDay(s){
+  if(!mirrorsPairings(s.day)) return;
   dayPeers(s.day).forEach(function(p){
     if(p.id===s.id) return;
     s.matches.forEach(function(m,i){
@@ -235,6 +242,7 @@ function syncDay(s){
    so a pairing somebody already set by hand is never overwritten. */
 function normalizeDays(){
   S.sessions.forEach(function(s){
+    if(!mirrorsPairings(s.day)) return;
     dayPeers(s.day).forEach(function(p){
       if(p.id===s.id) return;
       s.matches.forEach(function(m,i){
@@ -1161,16 +1169,29 @@ function renderSetup(){
     'The two formats allocate strokes differently, so each nine shows its own under every match.</div>';
   dayList().forEach(function(d){
     var peers=dayPeers(d), lead=peers[0], open=pairOpen===d;
-    var filled=lead.matches.filter(function(m){return m.aIds.length&&m.bIds.length}).length;
+    /* one draw on a mirrored day, two to fill when the nines are independent */
+    var counted = mirrorsPairings(d) ? [lead] : peers;
+    var filled=0, slots=0;
+    counted.forEach(function(p){
+      slots += p.matches.length;
+      filled += p.matches.filter(function(m){return m.aIds.length&&m.bIds.length}).length;
+    });
     html+='<div style="display:flex;align-items:center;gap:7px;padding:9px 0;border-bottom:1px solid var(--sunk)">'+
       '<button data-pairopen="'+esc(d)+'" style="flex:1;min-width:0;text-align:left;min-height:40px">'+
         '<div style="font-weight:600;font-size:14px">'+(open?"▾":"▸")+' '+esc(d)+'</div>'+
         '<div class="eyebrow">'+peers.map(function(p){
             return esc(nineName(p))+" "+esc(FORMATS[p.format].label)}).join(" · ")+
-          ' · '+filled+'/'+lead.matches.length+' set</div></button>'+
+          ' · '+filled+'/'+slots+' set</div></button>'+
       '<button class="btn" data-swapnine="'+esc(d)+'" style="min-height:40px;padding:0 10px;font-size:12px">Swap</button>'+
       '<button class="btn" data-pair="'+esc(d)+'" style="min-height:40px;padding:0 11px;font-size:13px">Shuffle</button></div>';
-    if(open) html+=pairEditor(peers);
+    /* A mirrored day is one draw shown once. A day whose nines switch opponents
+       gets an editor per nine, each writing to its own session. */
+    if(open) html += mirrorsPairings(d)
+      ? pairEditor(peers)
+      : peers.map(function(p){
+          return '<div class="eyebrow" style="margin:12px 0 2px">'+esc(nineName(p))+
+            ' · '+esc(FORMATS[p.format].label)+'</div>'+pairEditor([p]);
+        }).join("");
   });
   html+='<button class="btn" id="pairall" style="width:100%;margin-top:12px">Auto-pair all three days</button></div>';
 
@@ -1343,9 +1364,16 @@ function wire(root){
     touchCfg();
   });
   on("[data-pair]","click",function(){
-    var lead=dayPeers(this.getAttribute("data-pair"))[0];
-    autoPair(lead); syncDay(lead); touchCfg();
-    toast(lead.day+" paired — both nines.");
+    var d=this.getAttribute("data-pair"), peers=dayPeers(d);
+    if(mirrorsPairings(d)){
+      autoPair(peers[0]); syncDay(peers[0]); touchCfg();
+      toast(d+" paired — both nines.");
+    }else{
+      /* each nine drawn separately, so nobody meets the same opponent twice */
+      peers.forEach(function(p){ autoPair(p) });
+      touchCfg();
+      toast(d+" paired — a fresh draw on each nine.");
+    }
   });
   on("[data-swapnine]","click",function(){
     dayPeers(this.getAttribute("data-swapnine")).forEach(function(s){
@@ -1390,7 +1418,11 @@ function wire(root){
     touchCfg();
   });
   var pa=root.querySelector("#pairall"); if(pa)pa.onclick=function(){
-    dayList().forEach(function(d){ var lead=dayPeers(d)[0]; autoPair(lead); syncDay(lead) });
+    dayList().forEach(function(d){
+      var peers=dayPeers(d);
+      if(mirrorsPairings(d)){ autoPair(peers[0]); syncDay(peers[0]) }
+      else peers.forEach(function(p){ autoPair(p) });
+    });
     touchCfg(); toast("All three days paired.")};
   on("[data-si]","change",function(){
     var i=+this.getAttribute("data-si");
