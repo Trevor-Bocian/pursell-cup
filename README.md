@@ -88,7 +88,8 @@ distinct per session so the two nines keep separate scorecards.
   `courseHandicap × allowance`, then all four are reduced by the lowest so the low man
   plays scratch. Net best ball per side decides the hole.
 
-**Course handicaps are halved first** — these are nine-hole matches.
+**Course handicaps are halved first** — these are nine-hole matches. Except on
+Saturday: see **Splitting the allocation across the two nines** below.
 
 **Stroke index is ranked within the nine being played, not taken raw from the 18-hole
 card.** This is the easy thing to get wrong. On the front, hole 4 (SI 1) is stroke #1 and
@@ -110,6 +111,28 @@ mix of Whitetail and Bobcat players doesn't change it. The card carries a *secon
 HANDICAP row lower down, under the QUAIL yardages; those are the forward-tee indexes
 and they differ (17 and 18 read 14 and 6 there, against 16 and 8 on the men's row).
 Copying that row in by mistake is a live bug, not a rounding detail.
+
+### Splitting the allocation across the two nines
+
+Halving each nine and rounding it on its own sends a half-stroke **up on both nines**,
+so every odd course-handicap difference gained a stroke across the day: a 12 gave a 13
+two shots where eighteen holes of golf gives one. That distorted half of every possible
+pairing, always in the higher handicap's favour.
+
+Sessions listed in `SPLIT18_SESSIONS` (Saturday's two singles nines) instead allocate
+over all eighteen holes and split the result: `allocation()` uses the **full** course
+handicap rather than the halved one, and `nineShare()` gives the front `ceil(D/2)`
+strokes and the back `floor(D/2)`. Because the front holds the odd stroke indexes and
+the back the even ones, that reproduces a true eighteen-hole allocation exactly — the
+strokes land on SI 1, 2, 3 … in order and the day's total equals the handicap
+difference.
+
+The front carries the extra on an odd difference, which means **a one-shot match plays
+scratch on the back nine**. That is correct golf and it surprises people, so say it out
+loud before anyone tees off.
+
+Thursday and Friday are deliberately not in the list: they keep the per-nine halving
+they were played under. `tests/split18.test.js` covers both rules side by side.
 
 ## Sync model
 
@@ -231,6 +254,8 @@ node tests/daysync.test.js     # 11 checks: per-day pairing mirror
 node tests/merge.test.js       # 21 checks: per-entity config merge (artifact + firebase share this)
 node tests/firebase.test.js    # 15 checks: RTDB key-order + empty-array round trip
 node tests/course.test.js      # 35 checks: stroke-index migration, per-session pinning
+node tests/shotgun.test.js     # 41 checks: shotgun starts, play order, start-hole sync
+node tests/split18.test.js     # 45 checks: 18-hole allocation split across the nines
 node tools/rostercheck.js      # handicap spread analysis, not a test
 ```
 
@@ -246,6 +271,8 @@ tests/daysync.test.js       pairing mirror
 tests/merge.test.js         per-entity config merge
 tests/firebase.test.js      RTDB ordering + empty-array round trip
 tests/course.test.js        stroke-index migration, per-session pinning
+tests/shotgun.test.js       shotgun starts and play order
+tests/split18.test.js       18-hole allocation split across the two nines
 tools/rostercheck.js        handicap analysis
 vercel.json                 rewrite / to pursell-cup.html, no-store
 .vercelignore                keeps tests/tools/archive out of the deploy

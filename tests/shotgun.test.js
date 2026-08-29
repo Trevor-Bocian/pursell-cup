@@ -33,9 +33,10 @@ const arr = n => src.match(rx(n))[1].split(",").map(s => Number(s.trim()));
 const strs = n => src.match(rx(n))[1].split(",").map(s => s.trim().replace(/^["']|["']$/g, ""));
 
 const FORMATS_SRC = src.match(/var FORMATS = \{[\s\S]*?\n\};/)[0];
-const names = ["siOf","holesOf","playOrder","ranksOf","player","chOf","round",
-  "allocation","strokesOnHole","sideStrokes","pStrokes","holeWinner","evalMatch"];
-const ENV = new Function("S","SI_PLAYED","SI_PLAYED_SESSIONS",
+const names = ["splits18","nineShare","siOf","holesOf","playOrder","ranksOf",
+  "player","chOf","round","allocation","strokesOnHole","sideStrokes","pStrokes",
+  "holeWinner","evalMatch"];
+const ENV = new Function("S","SI_PLAYED","SI_PLAYED_SESSIONS","SPLIT18_SESSIONS",
   FORMATS_SRC + "\n" + names.map(extract).join("\n") + "\nreturn {" + names.join(",") + "};");
 
 const players = [
@@ -43,7 +44,7 @@ const players = [
   { id:"b1", name:"B One", ch:10, team:"b" }
 ];
 const S = { si: arr("SI"), par: arr("PAR"), players, results: {} };
-const E = ENV(S, arr("SI_PLAYED"), strs("SI_PLAYED_SESSIONS"));
+const E = ENV(S, arr("SI_PLAYED"), strs("SI_PLAYED_SESSIONS"), strs("SPLIT18_SESSIONS"));
 
 let pass = 0, fail = 0;
 const eq = (l, g, w) => {
@@ -128,7 +129,7 @@ console.log("\n=== strokes never move ===");
   const hi = [{ id:"a1", name:"A One", ch:10, team:"a" },
               { id:"b1", name:"B One", ch:29, team:"b" }];
   const S2 = { si: arr("SI"), par: arr("PAR"), players: hi, results: {} };
-  const E2 = ENV(S2, arr("SI_PLAYED"), strs("SI_PLAYED_SESSIONS"));
+  const E2 = ENV(S2, arr("SI_PLAYED"), strs("SI_PLAYED_SESSIONS"), strs("SPLIT18_SESSIONS"));
   const ranks = E2.ranksOf(back);
   const base = E2.allocation(M(), back);
   [12, 14, 18].forEach(st => {

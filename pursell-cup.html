@@ -483,7 +483,29 @@ function touchResult(mid,r){
   syncResult(mid,r);
 }
 
-/* ================= golf math ================= */
+/* ================= golf math =================
+
+   Sessions that allocate across all eighteen holes and then split the strokes
+   between the two nines, instead of halving each nine and rounding it on its own.
+
+   Halving twice rounds a half-stroke up on BOTH nines, so every odd course
+   handicap difference gained a stroke across the day: a 12 gave a 13 two shots
+   where eighteen holes of golf gives one, and that hit half of every possible
+   pairing, always in the higher man's favour. Splitting the eighteen-hole
+   allocation puts the day's total back to the true difference. The front carries
+   the extra on an odd difference because it holds SI 1 — which also means a
+   one-shot match plays scratch on the back. That is correct, and worth telling
+   the players before they tee off. */
+var SPLIT18_SESSIONS = ["s5","s6"];   /* Saturday singles */
+function splits18(sess){ return !!sess && SPLIT18_SESSIONS.indexOf(sess.id)>=0 }
+/* Of D strokes allocated over eighteen holes, how many land on this nine.
+   The front holds the odd stroke indexes and the back the even ones, so the
+   count is simply how many odd (or even) numbers there are in 1..D. */
+function nineShare(D,sess){
+  if(!D||D<=0) return 0;
+  return sess.nine==="back" ? Math.floor(D/2) : Math.ceil(D/2);
+}
+
 function holesOf(sess){
   var out=[],start = sess.nine==="back"?10:1;
   for(var i=0;i<9;i++) out.push(start+i);
@@ -541,22 +563,29 @@ function allocation(match,sess){
   var F=FORMATS[sess.format];
   var A=(match.aIds||[]).filter(player), B=(match.bIds||[]).filter(player);
   if(!A.length||!B.length) return {kind:"none",strokes:{},side:null,count:0};
-  var half=function(id){return chOf(id)/2};
+  /* Half the course handicap for a self-contained nine-hole match; the full
+     figure when the day's allocation is computed over eighteen and then split. */
+  var split=splits18(sess);
+  var unit=function(id){ return split ? chOf(id) : chOf(id)/2 };
 
   if(F.alloc==="player"){
-    var all=A.concat(B).map(function(id){return {id:id,raw:half(id)*F.pct}});
+    var all=A.concat(B).map(function(id){return {id:id,raw:unit(id)*F.pct}});
     var low=Math.min.apply(null,all.map(function(x){return x.raw}));
     var st={};
-    all.forEach(function(x){st[x.id]=round(x.raw-low)});
+    all.forEach(function(x){
+      var d=round(x.raw-low);
+      st[x.id]= split ? nineShare(d,sess) : d;
+    });
     return {kind:"player",strokes:st,side:null,count:0};
   }
   function teamCH(ids){
-    var v=ids.map(half).sort(function(x,y){return x-y});
+    var v=ids.map(unit).sort(function(x,y){return x-y});
     if(F.alloc==="diff") return v[0];
     return F.lo*v[0] + F.hi*(v.length>1?v[1]:v[0]);
   }
   var ta=teamCH(A), tb=teamCH(B), d=round(Math.abs(ta-tb));
-  return {kind:"side",side: ta>tb?"a":"b", count:d, strokes:{}};
+  return {kind:"side",side: ta>tb?"a":"b",
+          count: split ? nineShare(d,sess) : d, strokes:{}};
 }
 function strokesOnHole(n,hole,ranks){
   if(!n||n<=0) return 0;
