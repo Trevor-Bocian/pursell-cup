@@ -1219,10 +1219,102 @@ function renderSetup(){
       '<button class="btn" id="pull" style="flex:1;font-size:13px">Refresh from board</button>'+
       '<button class="btn" id="discard" style="flex:1;font-size:13px">Discard my unposted</button></div>'+
     '<div style="margin-top:15px;padding-top:12px;border-top:1px solid var(--sunk)">'+
+      '<div class="eyebrow" style="margin-bottom:7px">Export</div>'+
+      '<button class="btn" id="export" style="width:100%;font-size:13px">Copy the whole board as text</button>'+
+      '<div class="mini" style="margin-top:6px">Everything that decides a result — roster, pairings, '+
+        'start holes and every hole scored — as one line you can paste anywhere.</div>'+
+    '</div>'+
+    '<div style="margin-top:15px;padding-top:12px;border-top:1px solid var(--sunk)">'+
       '<div class="eyebrow" style="margin-bottom:7px">Captains only</div>'+
       '<button class="btn btn-danger" id="wipe" style="width:100%;font-size:13px">Wipe every score in the event</button>'+
     '</div></div>';
   return html;
+}
+
+/* One line carrying everything that decides a result. Players become indices and
+   a match's nine holes become nine characters, which is the difference between a
+   30KB paste and a 3KB one. */
+function boardDump(){
+  var idx={}; (S.players||[]).forEach(function(p,i){ idx[p.id]=i });
+  var out={
+    v:1,
+    t:[S.teams.a.name, S.teams.b.name],
+    si:S.si, par:S.par,
+    p:(S.players||[]).map(function(p){ return [p.name, Number(p.ch)||0, p.team] }),
+    s:(S.sessions||[]).map(function(s){
+      var st=s.nine==="back"?10:1;
+      var o={ id:s.id, d:s.day, f:s.format, n:s.nine };
+      if(s.si) o.si=s.si;
+      o.m=(s.matches||[]).map(function(m){
+        var e={ a:(m.aIds||[]).map(function(i){return idx[i]}).filter(function(x){return x!=null}),
+                b:(m.bIds||[]).map(function(i){return idx[i]}).filter(function(x){return x!=null}) };
+        if(m.start) e.st=+m.start;
+        var res=(S.results||{})[m.id];
+        if(res){
+          if(res.holes){
+            var r=""; for(var k=0;k<9;k++){ r += res.holes[st+k] || "-" }
+            if(/[ABH]/.test(r)) e.r=r;
+          }
+          if(res.scores){
+            var sc={};
+            for(var k2=0;k2<9;k2++){
+              var h=st+k2, row=res.scores[h]; if(!row) continue;
+              var cell={};
+              for(var key in row){
+                if(!Object.prototype.hasOwnProperty.call(row,key)) continue;
+                if(row[key]==null) continue;
+                cell[ idx[key]!=null ? idx[key] : key ] = row[key];
+              }
+              if(Object.keys(cell).length) sc[h]=cell;
+            }
+            if(Object.keys(sc).length) e.sc=sc;
+          }
+        }
+        return e;
+      });
+      return o;
+    })
+  };
+  return "PURSELL "+JSON.stringify(out);
+}
+/* Clipboard access is refused often enough on a phone that the text has to be
+   on screen and selectable as well, or the button is a dead end. */
+function showExport(){
+  var txt=boardDump();
+  var old=document.getElementById("exportsheet"); if(old) old.parentNode.removeChild(old);
+  var wrap=document.createElement("div");
+  wrap.id="exportsheet";
+  wrap.setAttribute("style","position:fixed;inset:0;z-index:200;background:var(--ground);"+
+    "padding:14px;display:flex;flex-direction:column;gap:10px");
+  var head=document.createElement("div");
+  head.className="mini";
+  head.textContent=txt.length+" characters. Tap Copy, then paste it wherever you need it.";
+  var ta=document.createElement("textarea");
+  ta.value=txt; ta.readOnly=true;
+  ta.setAttribute("style","flex:1;width:100%;font-family:ui-monospace,Menlo,monospace;"+
+    "font-size:11px;line-height:1.35;word-break:break-all;-webkit-user-select:all;user-select:all");
+  var row=document.createElement("div");
+  row.className="row"; row.setAttribute("style","flex-wrap:nowrap;gap:8px");
+  var copy=document.createElement("button");
+  copy.className="btn btn-solid"; copy.style.flex="1"; copy.textContent="Copy";
+  copy.onclick=function(){
+    ta.focus(); try{ ta.setSelectionRange(0,ta.value.length) }catch(e){}
+    var ok=false; try{ ok=document.execCommand("copy") }catch(e){}
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(
+        function(){ head.textContent="Copied." },
+        function(){ head.textContent = ok ? "Copied."
+          : "Copy was blocked — tap and hold the text, Select All, then Copy."; });
+    }else head.textContent = ok ? "Copied."
+      : "Tap and hold the text, Select All, then Copy.";
+  };
+  var close=document.createElement("button");
+  close.className="btn"; close.style.flex="0 0 auto"; close.textContent="Done";
+  close.onclick=function(){ wrap.parentNode.removeChild(wrap) };
+  row.appendChild(copy); row.appendChild(close);
+  wrap.appendChild(head); wrap.appendChild(ta); wrap.appendChild(row);
+  document.body.appendChild(wrap);
+  ta.focus(); try{ ta.setSelectionRange(0,ta.value.length) }catch(e){}
 }
 
 /* Hand-pairing editor for one day. Slots write to the day's first session and
@@ -1433,6 +1525,7 @@ function wire(root){
     if(this.getAttribute("data-armed")){ S.results={}; saveLocal(); location.reload() }
     else{ this.setAttribute("data-armed","1"); this.textContent="Tap again — drops unposted holes" }
   };
+  var ex=root.querySelector("#export"); if(ex)ex.onclick=showExport;
   /* Three taps. Twenty people share this board and it wipes the whole event. */
   var wp=root.querySelector("#wipe"); if(wp)wp.onclick=function(){
     var n=(+this.getAttribute("data-armed")||0)+1;
