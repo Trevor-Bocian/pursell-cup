@@ -23,10 +23,15 @@ while ((m = re.exec(html))) {
 
 const count = (r) => (html.match(r) || []).length;
 console.log("\n=== structural health ===");
+/* A file pulled from the live artifact carries the host runtime; a pre-publish
+   source file does not, because the host injects it at serve time. Expect each
+   accordingly instead of reporting a source build as broken. */
+const isLive = html.indexOf("<!-- frame-runtime -->") >= 0;
+console.log("  (" + (isLive ? "live artifact" : "pre-publish source") + ")");
 const checks = [
   ["size",                 `${(html.length/1024).toFixed(1)} KB`, null],
-  ["frame-runtime blocks", count(/<!--\s*frame-runtime\s*-->/g), 1],
-  ["<base href> tags",     count(/<base\s+href=/g),               1],
+  ["frame-runtime blocks", count(/<!--\s*frame-runtime\s*-->/g), isLive ? 1 : 0],
+  ["<base href> tags",     count(/<base\s+href=/g), isLive ? 1 : 0],
   ["parseable state",      blocks.length,                         1],
   ["<title> tags",         count(/<title>/g),                     1]
 ];
