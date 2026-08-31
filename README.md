@@ -7,6 +7,14 @@ Single self-contained HTML file. No build step, no dependencies, no framework.
 
 **Live board:** https://claude.ai/code/artifact/98941b42-dc27-4519-9417-8a3a35db2837
 
+> **Status: the event is over and the app is locked.**
+> `LOCKED = true` near the top of the script freezes it into a read-only
+> record: no Setup tab, no hole entry, no posting, and `pickDriver()` returns
+> `"local"` so no sync driver runs at all. The board renders entirely from the
+> state embedded in the file, so it needs neither Firebase nor the artifact
+> publish path. The final result is also archived in `archive/`.
+> Set `LOCKED = false` to reopen it for another event.
+
 ---
 
 ## Read this before changing anything

@@ -181,6 +181,13 @@ var FIREBASE = {
 };
 var ROOT = "pursellCup2026";
 
+/* The event is over and the result is final. LOCKED freezes the app into a
+   read-only record: no Setup, no hole entry, no posting, and no sync driver
+   at all — the board renders entirely from the state embedded in this file,
+   so it cannot be changed by anyone and does not depend on Firebase or on
+   the artifact publish path staying available. Set false to reopen it. */
+var LOCKED = true;
+
 /* ================= course: FarmLinks at Pursell Farms ================= */
 var PAR = [5,4,4,4,3,5,4,3,4, 5,4,4,4,4,3,4,3,5];
 var SI  = [15,9,13,1,7,17,11,5,3, 14,6,2,18,4,10,12,16,8];
@@ -681,11 +688,13 @@ function pts(v){
        be read-only). Nothing leaves this phone. */
 var driver="local";
 function pickDriver(){
+  if(LOCKED) return "local";
   if(FIREBASE.databaseURL && window.firebase && window.firebase.database) return "firebase";
   if(window.claude && window.claude.use) return "artifact";
   return "local";
 }
 function syncLabel(){
+  if(LOCKED) return "Final result · read only";
   if(driver==="firebase") return "Synced live · Firebase";
   if(driver==="artifact") return "Synced live · shared board";
   return "Local only · not synced";
@@ -800,11 +809,13 @@ function pushFirebaseConfig(){
   db.ref().update(updates).catch(function(){});
 }
 function syncResult(mid,r){
+  if(LOCKED) return;
   if(driver!=="firebase") return;
   var db=ensureFirebase(); if(!db) return;
   db.ref(ROOT+"/results/"+mid).set(r).catch(function(){});
 }
 function syncWipe(){
+  if(LOCKED) return;
   if(driver!=="firebase") return;
   var db=ensureFirebase(); if(!db) return;
   db.ref(ROOT+"/results").remove().catch(function(){});
@@ -824,6 +835,7 @@ function stateTag(){
   return '<script id="app-state" type="application/json">'+json+'<\/script>';
 }
 function post(){
+  if(LOCKED) return;
   if(posting) return;
   posting=true; render();
   ensureArtifact().then(function(ns){
@@ -1026,7 +1038,9 @@ function renderMatch(){
     '<h2 style="font-size:19px">Hole '+h+'</h2>'+
     '<span class="eyebrow">Par '+S.par[h-1]+' · SI '+siOf(s)[h-1]+' · #'+e.ranks[h]+' on this nine</span></div>';
 
-  if(mode==="tap"){
+  if(LOCKED){
+    html+=holeRecap(m,s,e,h,res);
+  } else if(mode==="tap"){
     var w=holeWinner(m,s,res,h,e.alloc,e.ranks);
     var opts=[["A",S.teams.a.name,"var(--a)"],["H","Halve","var(--halve)"],["B",S.teams.b.name,"var(--b)"]];
     html+='<div class="tap3">'+opts.map(function(o){
@@ -1045,12 +1059,14 @@ function renderMatch(){
 
   html+='<div class="sec-h" style="margin-top:14px;gap:8px">'+
     '<button class="btn" id="prev" style="min-height:44px"'+(hs.indexOf(h)===0?" disabled":"")+'>Prev</button>'+
-    '<button class="eyebrow" id="mode" style="text-decoration:underline;min-height:44px;padding:0 4px">'+
-      (mode==="tap"?"Enter scores":"Tap winner")+'</button>'+
+    (LOCKED
+      ? '<span class="eyebrow">'+(hs.indexOf(h)+1)+' of 9</span>'
+      : '<button class="eyebrow" id="mode" style="text-decoration:underline;min-height:44px;padding:0 4px">'+
+          (mode==="tap"?"Enter scores":"Tap winner")+'</button>')+
     '<button class="btn btn-solid" id="next" style="min-height:44px"'+(hs.indexOf(h)===8?" disabled":"")+'>Next</button>'+
     '</div></div>';
 
-  html+= driver==="artifact" ?
+  if(!LOCKED) html+= driver==="artifact" ?
     ('<button class="btn btn-solid" id="post" style="width:100%"'+(posting?" disabled":"")+'>'+
       (posting?"Posting…":"Post to the board")+'</button>'+
       '<div class="mini" style="text-align:center;margin-top:-8px">Scores save on this phone instantly. '+
@@ -1059,6 +1075,39 @@ function renderMatch(){
         "Scores sync automatically to every phone with the link." :
         "Scores save on this phone only — no shared board is connected.")+'</div>');
   return html;
+}
+/* Read-only rendering of one hole, used when LOCKED. Same information the
+   entry card showed while scoring — strokes given, each score, who won —
+   with nothing to type into. */
+function holeRecap(m,s,e,h,res){
+  var w=holeWinner(m,s,res,h,e.alloc,e.ranks);
+  var sc=(res.scores&&res.scores[h])||{};
+  function row(label,cls,strokes,raw){
+    return '<div class="pentry"><div style="flex:1;min-width:0">'+
+      '<div class="side side-'+cls+'">'+label+'</div>'+
+      (strokes?'<span class="shot">−'+strokeText(strokes)+' here</span>'
+              :'<span class="mini">no stroke</span>')+'</div>'+
+      '<div class="num" style="font-size:21px;width:74px;text-align:center;color:'+
+        (raw==null?"var(--ink-3)":"var(--ink)")+'">'+(raw==null?"–":raw)+'</div></div>';
+  }
+  var rows;
+  if(e.alloc.kind==="player"){
+    rows=["a","b"].map(function(side){
+      return ((side==="a"?m.aIds:m.bIds)||[]).filter(function(id){return player(id)})
+        .map(function(id){ return row(esc(nameOf(id)),side,pStrokes(e.alloc,id,h,e.ranks),sc[id]) })
+        .join("");
+    }).join("");
+  }else{
+    rows=["a","b"].map(function(side){
+      return row(esc(sideNames(side==="a"?m.aIds:m.bIds)),side,
+                 sideStrokes(e.alloc,side,h,e.ranks),sc[side]);
+    }).join("");
+  }
+  var verdict = !w ? "Not played"
+    : w==="H" ? "Hole halved"
+    : esc(S.teams[w.toLowerCase()].name)+" won the hole";
+  return rows+'<div class="mini" style="text-align:center;margin-top:10px;font-weight:600">'+
+    verdict+'</div>';
 }
 function allocLine(m,alloc,s){
   if(alloc.kind==="none") return "";
@@ -1545,7 +1594,8 @@ function wire(root){
 /* ================= shell ================= */
 function renderNav(){
   var n=document.getElementById("nav");
-  var items=[["board","Board"],["matches","Matches"],["setup","Setup"]];
+  var items=[["board","Board"],["matches","Matches"]];
+  if(!LOCKED) items.push(["setup","Setup"]);
   n.innerHTML=items.map(function(i){
     return '<button data-view="'+i[0]+'"'+(view===i[0]&&!openId?' aria-current="page"':'')+'>'+i[1]+'</button>';
   }).join("");
@@ -1556,6 +1606,7 @@ function renderNav(){
 function render(){
   renderHeader(); renderNav();
   var m=document.getElementById("main");
+    if(LOCKED && view==="setup") view="board";
   m.innerHTML = openId ? renderMatch() : view==="board" ? renderBoard() :
                 view==="matches" ? renderMatches() : renderSetup();
   wire(m);

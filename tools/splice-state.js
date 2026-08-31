@@ -24,9 +24,19 @@ function liveState(html) {
   return null;
 }
 
-const liveHtml = fs.readFileSync(live, "utf8");
-const payload = liveState(liveHtml);
-if (!payload) { console.error("no parseable app-state in " + live + " — refusing to publish blind"); process.exit(1); }
+/* Source may be a downloaded artifact (pull the state out of its script tag)
+   or a state JSON straight from tools/archive.js. */
+let payload;
+if (/\.json$/i.test(live)) {
+  let o;
+  try { o = JSON.parse(fs.readFileSync(live, "utf8")); }
+  catch (e) { console.error("not valid JSON: " + live + " — " + e.message); process.exit(1); }
+  if (!o || !o.sessions) { console.error("no sessions in " + live + " — refusing to publish blind"); process.exit(1); }
+  payload = JSON.stringify(o).replace(/</g, "\\u003c");
+} else {
+  payload = liveState(fs.readFileSync(live, "utf8"));
+  if (!payload) { console.error("no parseable app-state in " + live + " — refusing to publish blind"); process.exit(1); }
+}
 
 const srcPath = path.join(__dirname, "..", "pursell-cup.html");
 const src = fs.readFileSync(srcPath, "utf8");
